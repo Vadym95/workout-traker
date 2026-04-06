@@ -370,6 +370,33 @@ h2 {
   margin: 0.85rem 0 0;
 }
 
+.cloud-account {
+  margin-top: 0.95rem;
+  padding: 0.9rem 1rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid rgba(102, 71, 40, 0.1);
+}
+
+.cloud-account-label,
+.cloud-account-note {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.cloud-account-label {
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.cloud-account-email {
+  margin: 0.38rem 0 0.2rem;
+  font-size: 1.05rem;
+  font-weight: 800;
+  word-break: break-word;
+}
+
 .cloud-actions {
   margin-top: 1rem;
 }

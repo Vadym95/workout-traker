@@ -1,6 +1,9 @@
 const STORAGE_KEY = "training-rhythm-tracker-v2";
-const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+const DRIVE_DATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+const DRIVE_SCOPE = [DRIVE_DATA_SCOPE, "openid", "email", "profile"].join(" ");
 const DEFAULT_DRIVE_FILE_NAME = "training-rhythm-data.json";
+const OPENID_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration";
+const FALLBACK_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo";
 const DRIVE_CONFIG = window.GOOGLE_DRIVE_CONFIG || {};
 
 const TRACKS = [
@@ -86,6 +89,9 @@ const elements = {
   driveSyncPill: document.querySelector("#drive-sync-pill"),
   driveStatus: document.querySelector("#drive-status"),
   driveHint: document.querySelector("#drive-hint"),
+  driveAccountWrap: document.querySelector("#drive-account-wrap"),
+  driveAccountEmail: document.querySelector("#drive-account-email"),
+  driveAccountNote: document.querySelector("#drive-account-note"),
 };
 
 const state = loadState();
@@ -102,6 +108,9 @@ const drive = {
   isSyncing: false,
   pendingAction: "",
   lastError: "",
+  accountEmail: "",
+  accountName: "",
+  userInfoEndpoint: "",
 };
 
 let toastTimer = null;
@@ -422,6 +431,7 @@ function renderDriveStatus() {
     "Подключите Google Drive, чтобы история не терялась при очистке браузера.";
   let hint =
     "Данные будут храниться в скрытой папке приложения на вашем Google Drive.";
+  let accountNote = "Google Drive подключен для этого аккаунта.";
 
   if (openedAsFile) {
     pill = "Нужен сервер";
@@ -465,9 +475,19 @@ function renderDriveStatus() {
       "Локальная копия уже была отправлена в Google Drive. Чтобы продолжить синхронизацию, подключите аккаунт снова.";
   }
 
+  if (connected && drive.accountEmail) {
+    accountNote = drive.accountName
+      ? `Вход выполнен как ${drive.accountName}.`
+      : "Вход выполнен в этот Google-аккаунт.";
+    hint = `Данные синхронизируются в скрытую папку Google Drive аккаунта ${drive.accountEmail}.`;
+  }
+
   elements.driveSyncPill.textContent = pill;
   elements.driveStatus.textContent = status;
   elements.driveHint.textContent = hint;
+  elements.driveAccountWrap.hidden = !drive.accountEmail;
+  elements.driveAccountEmail.textContent = drive.accountEmail || "-";
+  elements.driveAccountNote.textContent = accountNote;
 
   elements.driveConnect.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
   elements.driveSync.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
@@ -581,6 +601,8 @@ function handleDriveDisconnect() {
   drive.tokenExpiresAt = 0;
   drive.pendingAction = "";
   drive.lastError = "";
+  drive.accountEmail = "";
+  drive.accountName = "";
   window.clearTimeout(autoSyncTimer);
   renderDriveStatus();
   showToast("Google Drive отключен. Локальная копия осталась на месте.");
@@ -683,6 +705,8 @@ async function handleDriveTokenResponse(tokenResponse) {
   drive.accessToken = tokenResponse.access_token;
   drive.tokenExpiresAt =
     Date.now() + Math.max((tokenResponse.expires_in || 3600) - 60, 60) * 1000;
+
+  await loadDriveAccountProfile();
 
   const action = drive.pendingAction || "sync";
   drive.pendingAction = "";
@@ -923,6 +947,52 @@ function handleDriveFailure(error, fallbackMessage) {
 
 function hasValidDriveToken() {
   return Boolean(drive.accessToken) && Date.now() < drive.tokenExpiresAt;
+}
+
+async function loadDriveAccountProfile() {
+  if (!hasValidDriveToken()) {
+    return;
+  }
+
+  try {
+    const endpoint = await getUserInfoEndpoint();
+    const response = await driveFetch(endpoint);
+    const profile = await response.json();
+    drive.accountEmail = typeof profile.email === "string" ? profile.email : "";
+    drive.accountName = typeof profile.name === "string" ? profile.name : "";
+  } catch {
+    drive.accountEmail = "";
+    drive.accountName = "";
+  }
+
+  renderDriveStatus();
+}
+
+async function getUserInfoEndpoint() {
+  if (drive.userInfoEndpoint) {
+    return drive.userInfoEndpoint;
+  }
+
+  try {
+    const response = await fetch(OPENID_DISCOVERY_URL, {
+      headers: {
+        Accept: "application/json",
+      },
+    });
+    if (response.ok) {
+      const discovery = await response.json();
+      drive.userInfoEndpoint =
+        typeof discovery.userinfo_endpoint === "string"
+          ? discovery.userinfo_endpoint
+          : FALLBACK_USERINFO_ENDPOINT;
+      return drive.userInfoEndpoint;
+    }
+  } catch {
+    // Fall back to the documented Google userinfo endpoint.
+  }
+
+  drive.userInfoEndpoint = FALLBACK_USERINFO_ENDPOINT;
+  return drive.userInfoEndpoint;
 }
 
 function hasPendingCloudChanges() {
