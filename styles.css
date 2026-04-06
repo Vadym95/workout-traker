@@ -535,6 +535,17 @@ h2 {
   gap: 0.5rem;
 }
 
+.burn-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 1.05rem;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at top right, rgba(24, 117, 109, 0.18), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(245, 252, 249, 0.76));
+  border: 1px solid rgba(24, 117, 109, 0.14);
+}
+
 .day-pulse-label,
 .summary-label,
 .cadence-label,
@@ -550,10 +561,22 @@ h2 {
 
 .day-pulse-value,
 .summary-value,
-.card-title {
+.card-title,
+.burn-value {
   margin: 0;
   font-size: clamp(1.5rem, 3vw, 2.3rem);
   font-family: var(--font-display);
+}
+
+.burn-meta,
+.burn-breakdown {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+.burn-breakdown {
+  font-size: 0.94rem;
 }
 
 .summary-grid,

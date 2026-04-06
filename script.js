@@ -82,6 +82,9 @@ const elements = {
   statusNote: document.querySelector("#status-note"),
   dayPulseValue: document.querySelector("#day-pulse-value"),
   dayPulseText: document.querySelector("#day-pulse-text"),
+  todayBurnValue: document.querySelector("#today-burn-value"),
+  todayBurnMeta: document.querySelector("#today-burn-meta"),
+  todayBurnBreakdown: document.querySelector("#today-burn-breakdown"),
   streakValue: document.querySelector("#streak-value"),
   activeDaysValue: document.querySelector("#active-days-value"),
   volumeValue: document.querySelector("#volume-value"),
@@ -521,6 +524,10 @@ function renderSummary() {
   const focusTracks = getPlannedCheckboxTracks(state.selectedDate);
   const calories = getEstimatedCalories(state.selectedDate);
   const calorieAssumption = getCalorieAssumptionCopy();
+  const burnLabel =
+    state.selectedDate === getTodayString()
+      ? "примерно активных ккал за сегодня"
+      : "примерно активных ккал за выбранную дату";
 
   elements.progressRing.style.setProperty("--progress", stats.percent);
   elements.progressValue.textContent = `${stats.percent}%`;
@@ -529,7 +536,10 @@ function renderSummary() {
   elements.volumeValue.textContent = formatNumber(volume);
   elements.planValue.textContent = `${stats.completed} / ${stats.planned}`;
   elements.caloriesValue.textContent = `~${formatNumber(calories.total)}`;
-  elements.caloriesMeta.textContent = calorieAssumption;
+  elements.caloriesMeta.textContent = `${burnLabel} · ${calorieAssumption}`;
+  elements.todayBurnValue.textContent = `~${formatNumber(calories.total)} ккал`;
+  elements.todayBurnMeta.textContent = burnLabel;
+  elements.todayBurnBreakdown.textContent = formatBurnBreakdown(calories);
 
   const pulse = getPulseCopy(stats.percent, volume, focusTracks);
   elements.dayPulseValue.textContent = pulse.title;
@@ -1598,6 +1608,23 @@ function getCalorieAssumptionCopy() {
   }
 
   return `примерно активных ккал, ${hints.join(" · ")}`;
+}
+
+function formatBurnBreakdown(calories) {
+  const parts = Object.entries(calories.breakdown)
+    .map(([trackId, value]) => ({
+      title: getTrackTitle(getTrack(trackId)),
+      value: Math.round(value),
+    }))
+    .filter((part) => part.value > 0)
+    .sort((left, right) => right.value - left.value)
+    .slice(0, 3);
+
+  if (!parts.length) {
+    return "Пока нет активности на эту дату.";
+  }
+
+  return parts.map((part) => `${part.title}: ${formatNumber(part.value)}`).join(" · ");
 }
 
 function getTrack(trackId) {
