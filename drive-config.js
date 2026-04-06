@@ -1,4 +1,4 @@
 window.GOOGLE_DRIVE_CONFIG = {
-  clientId: "PASTE_GOOGLE_OAUTH_CLIENT_ID_HERE.apps.googleusercontent.com",
+  clientId: "678613252209-249j1v884vd4e5qbgslr90gpuak8epeo.apps.googleusercontent.com",
   fileName: "training-rhythm-data.json",
 };
