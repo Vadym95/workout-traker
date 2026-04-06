@@ -106,6 +106,8 @@ const elements = {
   driveAccountNote: document.querySelector("#drive-account-note"),
   historyRangeSwitch: document.querySelector("#history-range-switch"),
   historyRangeCaption: document.querySelector("#history-range-caption"),
+  absSchedulePreview: document.querySelector("#abs-schedule-preview"),
+  shouldersSchedulePreview: document.querySelector("#shoulders-schedule-preview"),
 };
 
 const state = loadState();
@@ -143,6 +145,8 @@ function init() {
   });
 
   elements.profilePanel.addEventListener("change", handleProfileInput);
+  elements.heroPlan.addEventListener("change", handlePlanInput);
+  elements.heroPlan.addEventListener("click", handlePlanScheduleClick);
   elements.trackerGrid.addEventListener("input", handleTrackerInput);
   elements.trackerGrid.addEventListener("click", handleChipClick);
   elements.saveDay.addEventListener("click", handleSaveClick);
@@ -167,6 +171,7 @@ function loadState() {
       cycleStartDate: sanitizeDateInput(parsed.cycleStartDate, today),
       historyRange: sanitizeHistoryRange(parsed.historyRange),
       profile: sanitizeProfile(parsed.profile),
+      plan: sanitizePlan(parsed.plan),
       entries: sanitizeEntries(parsed.entries),
       lastSavedAt: normalizeIso(parsed.lastSavedAt),
       updatedAt: normalizeIso(parsed.updatedAt) || normalizeIso(parsed.lastSavedAt),
@@ -179,6 +184,7 @@ function loadState() {
       cycleStartDate: today,
       historyRange: "7d",
       profile: sanitizeProfile(null),
+      plan: sanitizePlan(null),
       entries: {},
       lastSavedAt: null,
       updatedAt: null,
@@ -196,6 +202,7 @@ function persist() {
       cycleStartDate: state.cycleStartDate,
       historyRange: state.historyRange,
       profile: state.profile,
+      plan: state.plan,
       entries: state.entries,
       lastSavedAt: state.lastSavedAt,
       updatedAt: state.updatedAt,
@@ -316,10 +323,24 @@ function renderHeroPlan() {
       ${numericTracks
         .map(
           (track) => `
-            <div class="hero-plan-item">
+            <label class="hero-plan-item editable">
               <span class="hero-plan-name">${track.title}</span>
-              <strong>${formatNumber(track.target)}</strong>
-            </div>
+              <div class="hero-plan-target-wrap">
+                <input
+                  class="hero-plan-target-input"
+                  type="number"
+                  inputmode="numeric"
+                  min="0"
+                  step="1"
+                  value="${formatPlanInput(getTrackTarget(track))}"
+                  data-plan-target="${track.id}"
+                  aria-label="${track.title} цель"
+                />
+                <span class="hero-plan-target-unit">${
+                  track.id === "steps" ? "шагов" : "повт."
+                }</span>
+              </div>
+            </label>
           `,
         )
         .join("")}
@@ -329,33 +350,46 @@ function renderHeroPlan() {
       ${checkboxTracks
         .map((track) => {
           const activeToday = isTrackPlannedForDate(track, state.selectedDate);
+          const scheduleDays = getTrackScheduleDays(track);
           return `
             <div class="hero-schedule-card ${activeToday ? "active" : ""}">
               <div class="hero-schedule-top">
                 <span class="hero-plan-name">${track.title}</span>
-                <strong>${track.scheduleLabel}</strong>
+                <strong>${formatWeekdayList(scheduleDays)}</strong>
               </div>
               <div class="weekday-row">
                 ${WEEKDAY_LABELS.map(
                   (label, index) => `
-                    <span
+                    <button
+                      type="button"
                       class="weekday-chip ${
-                        track.scheduleDays.includes(index) ? "planned" : ""
+                        scheduleDays.includes(index) ? "planned" : ""
                       } ${selectedWeekday === index ? "selected" : ""} ${
                         activeToday && selectedWeekday === index ? "active" : ""
                       }"
+                      data-plan-day-toggle="${track.id}"
+                      data-weekday="${index}"
+                      aria-pressed="${scheduleDays.includes(index) ? "true" : "false"}"
                     >
                       ${label}
-                    </span>
+                    </button>
                   `,
                 ).join("")}
               </div>
+              <p class="hero-schedule-hint">Нажмите на дни, чтобы настроить свой ритм.</p>
             </div>
           `;
         })
         .join("")}
     </div>
   `;
+
+  elements.absSchedulePreview.textContent = `Пресс: ${formatWeekdayList(
+    getTrackScheduleDays(getTrack("abs")),
+  )}`;
+  elements.shouldersSchedulePreview.textContent = `Плечи: ${formatWeekdayList(
+    getTrackScheduleDays(getTrack("shoulders")),
+  )}`;
 }
 
 function renderTrackerGrid() {
@@ -458,7 +492,9 @@ function renderTrackerGrid() {
               ? "Любое число сохраняется для выбранной даты."
               : isAvailable
                 ? "Этот блок входит в план именно на выбранный день."
-                : `Следующая отметка по недельному ритму: ${track.scheduleLabel}.`
+                : `Следующая отметка по недельному ритму: ${formatWeekdayList(
+                    getTrackScheduleDays(track),
+                  )}.`
           }</p>
         </div>
       </article>
@@ -472,7 +508,7 @@ function renderSummary() {
   const volume = getNumericVolume(entry);
   const streak = getStreakLength(state.selectedDate);
   const activeDays = getRecentActiveDays(state.selectedDate, 7);
-  const focusTrack = getPlannedCheckboxTracks(state.selectedDate)[0] || null;
+  const focusTracks = getPlannedCheckboxTracks(state.selectedDate);
   const calories = getEstimatedCalories(state.selectedDate);
   const calorieAssumption = getCalorieAssumptionCopy();
 
@@ -485,7 +521,7 @@ function renderSummary() {
   elements.caloriesValue.textContent = `~${formatNumber(calories.total)}`;
   elements.caloriesMeta.textContent = calorieAssumption;
 
-  const pulse = getPulseCopy(stats.percent, volume, focusTrack);
+  const pulse = getPulseCopy(stats.percent, volume, focusTracks);
   elements.dayPulseValue.textContent = pulse.title;
   elements.dayPulseText.textContent = pulse.body;
   elements.heroText.textContent = pulse.hero;
@@ -508,9 +544,11 @@ function renderCadence() {
   const nextBlock = getNextScheduledBlock(state.selectedDate);
 
   if (plannedCheckboxTracks.length) {
-    const [track] = plannedCheckboxTracks;
-    elements.cadenceTitle.textContent = `Сегодня в плане ${track.title.toLowerCase()}`;
-    elements.cadenceText.textContent = `На ${formatDate(state.selectedDate)} в недельном ритме стоит ${track.title.toLowerCase()}. Когда блок закрыт, просто поставьте галочку.`;
+    const label = formatTrackList(plannedCheckboxTracks);
+    elements.cadenceTitle.textContent = `Сегодня в плане ${label}`;
+    elements.cadenceText.textContent =
+      `На ${formatDate(state.selectedDate)} в недельном ритме стоят ${label}. ` +
+      "Когда блоки закрыты, просто поставьте галочки.";
   } else {
     elements.cadenceTitle.textContent = "Сегодня день восстановления";
     elements.cadenceText.textContent =
@@ -522,7 +560,9 @@ function renderCadence() {
         nextBlock.tracks,
       )}`
     : "—";
-  elements.cycleStartLabel.textContent = "Пресс: Вс / Вт / Чт · Плечи: Пн / Ср / Пт";
+  elements.cycleStartLabel.textContent =
+    `Пресс: ${formatWeekdayList(getTrackScheduleDays(getTrack("abs")))} · ` +
+    `Плечи: ${formatWeekdayList(getTrackScheduleDays(getTrack("shoulders")))}`;
 }
 
 function renderHistory() {
@@ -823,6 +863,49 @@ function handleProfileInput(event) {
   state.profile = sanitizeProfile({
     ...state.profile,
     [field]: event.target.value,
+  });
+  noteCloudChange();
+  persist();
+  render();
+}
+
+function handlePlanInput(event) {
+  const trackId = event.target.dataset.planTarget;
+  if (!trackId) {
+    return;
+  }
+
+  state.plan = sanitizePlan({
+    ...state.plan,
+    targets: {
+      ...state.plan.targets,
+      [trackId]: event.target.value,
+    },
+  });
+  noteCloudChange();
+  persist();
+  render();
+}
+
+function handlePlanScheduleClick(event) {
+  const button = event.target.closest("[data-plan-day-toggle]");
+  if (!button) {
+    return;
+  }
+
+  const trackId = button.dataset.planDayToggle;
+  const weekday = Number(button.dataset.weekday);
+  const currentDays = getTrackScheduleDays(getTrack(trackId));
+  const nextDays = currentDays.includes(weekday)
+    ? currentDays.filter((day) => day !== weekday)
+    : [...currentDays, weekday].sort((left, right) => left - right);
+
+  state.plan = sanitizePlan({
+    ...state.plan,
+    schedules: {
+      ...state.plan.schedules,
+      [trackId]: nextDays,
+    },
   });
   noteCloudChange();
   persist();
@@ -1205,6 +1288,7 @@ function buildCloudPayload() {
     cycleStartDate: state.cycleStartDate,
     historyRange: state.historyRange,
     profile: state.profile,
+    plan: state.plan,
     entries: sanitizeEntries(state.entries),
   };
 }
@@ -1217,6 +1301,7 @@ function applyCloudPayload(payload, fileId) {
   state.cycleStartDate = sanitizeDateInput(payload.cycleStartDate, state.cycleStartDate);
   state.historyRange = sanitizeHistoryRange(payload.historyRange);
   state.profile = sanitizeProfile(payload.profile);
+  state.plan = sanitizePlan(payload.plan);
   state.entries = sanitizeEntries(payload.entries);
   state.lastSavedAt = normalizeIso(payload.lastSavedAt);
   state.updatedAt = normalizeIso(payload.updatedAt) || state.updatedAt;
@@ -1489,12 +1574,12 @@ function getTrack(trackId) {
 }
 
 function getPlannedTracks(date) {
-  return TRACKS.filter((track) => isTrackPlannedForDate(track, date));
+  return TRACKS.filter((track) => isTrackCountedInPlan(track, date));
 }
 
 function getPlannedCheckboxTracks(date) {
   return TRACKS.filter(
-    (track) => track.type === "checkbox" && isTrackPlannedForDate(track, date),
+    (track) => track.type === "checkbox" && isTrackScheduledForDate(track, date),
   );
 }
 
@@ -1503,7 +1588,28 @@ function isTrackPlannedForDate(track, date) {
     return true;
   }
 
-  return Array.isArray(track.scheduleDays) && track.scheduleDays.includes(getWeekdayIndex(date));
+  return isTrackScheduledForDate(track, date);
+}
+
+function isTrackCountedInPlan(track, date) {
+  if (track.type === "number") {
+    return getTrackTarget(track) > 0;
+  }
+
+  return isTrackScheduledForDate(track, date);
+}
+
+function isTrackScheduledForDate(track, date) {
+  return getTrackScheduleDays(track).includes(getWeekdayIndex(date));
+}
+
+function getTrackTarget(track) {
+  return sanitizePlanTarget(track.id, state.plan.targets[track.id]);
+}
+
+function getTrackScheduleDays(track) {
+  const days = state.plan.schedules[track.id];
+  return sanitizeWeekdayList(days);
 }
 
 function getWeekdayIndex(dateString) {
@@ -1524,6 +1630,15 @@ function getNextScheduledBlock(anchorDate) {
 
 function formatTrackList(tracks) {
   return tracks.map((track) => track.title.toLowerCase()).join(" и ");
+}
+
+function formatWeekdayList(days) {
+  const normalized = sanitizeWeekdayList(days);
+  if (!normalized.length) {
+    return "дни не выбраны";
+  }
+
+  return normalized.map((day) => WEEKDAY_LABELS[day]).join(" / ");
 }
 
 function getDayPlanMeta(date, plannedCheckboxTracks) {
@@ -1713,7 +1828,8 @@ function renderVolumeInsight(period) {
               (total, date) => total + sanitizeNumber(getEntry(date)[track.id]),
               0,
             );
-            const planned = track.target * period.dayCount;
+            const target = getTrackTarget(track);
+            const planned = target * period.dayCount;
             const percent = planned === 0 ? 0 : Math.round((actual / planned) * 100);
             const width = percent === 0 ? 0 : Math.max(8, Math.min(percent, 100));
 
@@ -1721,12 +1837,18 @@ function renderVolumeInsight(period) {
               <div class="volume-row">
                 <div class="volume-top">
                   <span>${track.title}</span>
-                  <strong>${formatNumber(actual)} / ${formatNumber(planned)}</strong>
+                  <strong>${
+                    planned > 0
+                      ? `${formatNumber(actual)} / ${formatNumber(planned)}`
+                      : `${formatNumber(actual)} / цель выключена`
+                  }</strong>
                 </div>
                 <div class="volume-track">
                   <span class="volume-fill" style="width: ${width}%; --fill-color: ${track.accent};"></span>
                 </div>
-                <p class="volume-meta">${percent}% от плана за период</p>
+                <p class="volume-meta">${
+                  planned > 0 ? `${percent}% от плана за период` : "Цель не задана и не влияет на процент."
+                }</p>
               </div>
             `;
           })
@@ -2018,6 +2140,65 @@ function formatProfileInput(value) {
   return Number.isInteger(value) ? String(value) : String(value).replace(/\.0$/, "");
 }
 
+function sanitizePlan(value) {
+  const plan = value && typeof value === "object" ? value : {};
+  const rawTargets = plan.targets && typeof plan.targets === "object" ? plan.targets : {};
+  const rawSchedules =
+    plan.schedules && typeof plan.schedules === "object" ? plan.schedules : {};
+
+  return {
+    targets: TRACKS.filter((track) => track.type === "number").reduce((accumulator, track) => {
+      accumulator[track.id] = sanitizePlanTarget(track.id, rawTargets[track.id] ?? track.target);
+      return accumulator;
+    }, {}),
+    schedules: TRACKS.filter((track) => track.type === "checkbox").reduce(
+      (accumulator, track) => {
+        accumulator[track.id] = sanitizeWeekdayList(
+          rawSchedules[track.id] ?? track.scheduleDays,
+        );
+        return accumulator;
+      },
+      {},
+    ),
+  };
+}
+
+function sanitizePlanTarget(trackId, value) {
+  const maxByTrack = {
+    pullups: 1000,
+    pushups: 3000,
+    squats: 5000,
+    steps: 100000,
+  };
+  const limit = maxByTrack[trackId] || 100000;
+  const number = Number(value);
+
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(Math.round(number), limit);
+}
+
+function sanitizeWeekdayList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort(
+    (left, right) => left - right,
+  );
+}
+
+function formatPlanInput(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return "";
+  }
+
+  return String(Math.round(number));
+}
+
 function sanitizeDateInput(value, fallback) {
   return isDateInputValue(value) ? value : fallback;
 }
@@ -2141,7 +2322,9 @@ function isSameDay(first, second) {
   return first === second;
 }
 
-function getPulseCopy(percent, volume, focusTrack) {
+function getPulseCopy(percent, volume, focusTracks) {
+  const focusLabel = formatTrackList(focusTracks || []);
+
   if (percent >= 100) {
     return {
       title: "План дня закрыт",
@@ -2154,8 +2337,8 @@ function getPulseCopy(percent, volume, focusTrack) {
     return {
       title: "Темп уже хороший",
       body: "Осталось закрыть еще пару направлений, и день будет ощущаться цельным.",
-      hero: focusTrack
-        ? `База уже есть. Если закрыть еще и ${focusTrack.title.toLowerCase()}, день соберется полностью.`
+      hero: focusLabel
+        ? `База уже есть. Если закрыть еще и ${focusLabel}, день соберется полностью.`
         : "База уже есть. На легком дне особенно важна ровная, спокойная серия.",
     };
   }
@@ -2171,8 +2354,8 @@ function getPulseCopy(percent, volume, focusTrack) {
   return {
     title: "Заполни первый блок",
     body: "Начни с одного упражнения или с шагов. Моментум любит простое начало.",
-    hero: focusTrack
-      ? `Сегодня в плане еще и ${focusTrack.title.toLowerCase()}, так что день можно закрыть особенно цельно.`
+    hero: focusLabel
+      ? `Сегодня в плане еще и ${focusLabel}, так что день можно закрыть особенно цельно.`
       : "Сегодня без дополнительного блока, так что можно спокойно держать базовый объем.",
   };
 }
