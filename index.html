@@ -35,6 +35,8 @@
         </div>
 
         <div class="hero-meter panel-soft">
+          <div class="hero-plan" id="hero-plan"></div>
+
           <div class="progress-ring" id="progress-ring">
             <div class="progress-ring-inner">
               <span class="progress-value" id="progress-value">0%</span>
@@ -90,15 +92,19 @@
               <input id="selected-date" type="date" />
             </label>
 
-            <label class="field">
-              <span class="field-label">Старт цикла через день</span>
-              <input id="cycle-start" type="date" />
-            </label>
+            <div class="field field-static">
+              <span class="field-label">Ритм недели</span>
+              <div class="field-static-box">
+                Пресс: Вс / Вт / Чт
+                <br />
+                Плечи: Пн / Ср / Пт
+              </div>
+            </div>
           </div>
 
           <p class="field-hint">
-            В день старта цикла пресс и плечи считаются тренировочными, дальше
-            график идет через день.
+            Числовые направления отмечаются ежедневно, а пресс и плечи
+            открываются по фиксированным дням недели.
           </p>
 
           <div class="cloud-panel panel-soft">
@@ -144,18 +150,18 @@
 
         <aside class="panel cadence-card" id="cadence-card">
           <p class="eyebrow">Ритм корпуса и плеч</p>
-          <h2 id="cadence-title">Сегодня тренировочный день</h2>
+          <h2 id="cadence-title">Сегодня в плане пресс</h2>
           <p class="cadence-text" id="cadence-text">
-            Отметь выполнение пресса и плеч, если план на сегодня закрыт.
+            Отметь дополнительный блок, который стоит в плане на выбранную дату.
           </p>
 
           <div class="cadence-metrics">
             <div>
-              <span class="cadence-label">Следующая тренировка</span>
+              <span class="cadence-label">Следующий блок</span>
               <strong id="next-workout">-</strong>
             </div>
             <div>
-              <span class="cadence-label">Старт цикла</span>
+              <span class="cadence-label">Ритм недели</span>
               <strong id="cycle-start-label">-</strong>
             </div>
           </div>
@@ -176,12 +182,30 @@
       <section class="panel history-section">
         <div class="section-heading">
           <div>
-            <p class="eyebrow">Последние дни</p>
+            <p class="eyebrow">Период обзора</p>
             <h2>История прогресса</h2>
+          </div>
+
+          <div class="history-toolbar">
+            <div class="range-switch" id="history-range-switch">
+              <button class="range-button active" data-range="7d" type="button">
+                7 дней
+              </button>
+              <button class="range-button" data-range="30d" type="button">
+                Месяц
+              </button>
+              <button class="range-button" data-range="year" type="button">
+                Год
+              </button>
+            </div>
+            <p class="history-range-caption" id="history-range-caption">
+              Последние 7 дней по выбранной дате.
+            </p>
           </div>
         </div>
 
         <div class="history-grid" id="history-grid"></div>
+        <div class="insight-grid" id="insight-grid"></div>
       </section>
     </main>
 

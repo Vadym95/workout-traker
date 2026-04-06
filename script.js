@@ -5,12 +5,15 @@ const DEFAULT_DRIVE_FILE_NAME = "training-rhythm-data.json";
 const OPENID_DISCOVERY_URL = "https://accounts.google.com/.well-known/openid-configuration";
 const FALLBACK_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/userinfo";
 const DRIVE_CONFIG = window.GOOGLE_DRIVE_CONFIG || {};
+const HISTORY_RANGES = ["7d", "30d", "year"];
+const WEEKDAY_LABELS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
 const TRACKS = [
   {
     id: "pullups",
     title: "Подтягивания",
     type: "number",
+    target: 30,
     unit: "повторений",
     accent: "#d56b35",
     description: "Запиши итог за день, чтобы видеть силу в динамике.",
@@ -20,6 +23,7 @@ const TRACKS = [
     id: "pushups",
     title: "Отжимания",
     type: "number",
+    target: 50,
     unit: "повторений",
     accent: "#f0b14d",
     description: "Даже короткий подход поддерживает ритм и серию.",
@@ -29,6 +33,7 @@ const TRACKS = [
     id: "squats",
     title: "Приседания",
     type: "number",
+    target: 100,
     unit: "повторений",
     accent: "#bf6c44",
     description: "Фиксируй объем ног так же честно, как верх тела.",
@@ -38,6 +43,7 @@ const TRACKS = [
     id: "steps",
     title: "Шаги",
     type: "number",
+    target: 15000,
     unit: "шагов",
     accent: "#18756d",
     description: "Ходьба держит общий тонус и помогает не выпадать из режима.",
@@ -48,27 +54,30 @@ const TRACKS = [
     title: "Пресс",
     type: "checkbox",
     accent: "#348d83",
-    cadence: "alternate",
-    description: "Тренировка через день. Здесь нужна только отметка о выполнении.",
+    scheduleDays: [0, 2, 4],
+    scheduleLabel: "Вс / Вт / Чт",
+    description: "Фиксированный блок по Вс / Вт / Чт. Нужна только отметка о выполнении.",
   },
   {
     id: "shoulders",
     title: "Тренировка плеч",
     type: "checkbox",
     accent: "#9f4b21",
-    cadence: "alternate",
-    description: "Тренировка через день. Отметь галочкой, когда сессия закрыта.",
+    scheduleDays: [1, 3, 5],
+    scheduleLabel: "Пн / Ср / Пт",
+    description: "Фиксированный блок по Пн / Ср / Пт. Отметь галочкой, когда сессия закрыта.",
   },
 ];
 
 const elements = {
   selectedDate: document.querySelector("#selected-date"),
-  cycleStart: document.querySelector("#cycle-start"),
   trackerGrid: document.querySelector("#tracker-grid"),
   historyGrid: document.querySelector("#history-grid"),
+  insightGrid: document.querySelector("#insight-grid"),
   progressRing: document.querySelector("#progress-ring"),
   progressValue: document.querySelector("#progress-value"),
   heroText: document.querySelector("#hero-text"),
+  heroPlan: document.querySelector("#hero-plan"),
   statusNote: document.querySelector("#status-note"),
   dayPulseValue: document.querySelector("#day-pulse-value"),
   dayPulseText: document.querySelector("#day-pulse-text"),
@@ -92,6 +101,8 @@ const elements = {
   driveAccountWrap: document.querySelector("#drive-account-wrap"),
   driveAccountEmail: document.querySelector("#drive-account-email"),
   driveAccountNote: document.querySelector("#drive-account-note"),
+  historyRangeSwitch: document.querySelector("#history-range-switch"),
+  historyRangeCaption: document.querySelector("#history-range-caption"),
 };
 
 const state = loadState();
@@ -121,17 +132,9 @@ init();
 
 function init() {
   elements.selectedDate.value = state.selectedDate;
-  elements.cycleStart.value = state.cycleStartDate;
 
   elements.selectedDate.addEventListener("input", (event) => {
     state.selectedDate = event.target.value || getTodayString();
-    persist();
-    render();
-  });
-
-  elements.cycleStart.addEventListener("input", (event) => {
-    state.cycleStartDate = event.target.value || getTodayString();
-    noteCloudChange();
     persist();
     render();
   });
@@ -143,6 +146,7 @@ function init() {
   elements.driveConnect.addEventListener("click", handleDriveConnect);
   elements.driveSync.addEventListener("click", handleDriveSync);
   elements.driveDisconnect.addEventListener("click", handleDriveDisconnect);
+  elements.historyRangeSwitch.addEventListener("click", handleHistoryRangeClick);
 
   render();
   bootstrapDrive();
@@ -157,6 +161,7 @@ function loadState() {
     return {
       selectedDate: sanitizeDateInput(parsed.selectedDate, today),
       cycleStartDate: sanitizeDateInput(parsed.cycleStartDate, today),
+      historyRange: sanitizeHistoryRange(parsed.historyRange),
       entries: sanitizeEntries(parsed.entries),
       lastSavedAt: normalizeIso(parsed.lastSavedAt),
       updatedAt: normalizeIso(parsed.updatedAt) || normalizeIso(parsed.lastSavedAt),
@@ -167,6 +172,7 @@ function loadState() {
     return {
       selectedDate: today,
       cycleStartDate: today,
+      historyRange: "7d",
       entries: {},
       lastSavedAt: null,
       updatedAt: null,
@@ -182,6 +188,7 @@ function persist() {
     JSON.stringify({
       selectedDate: state.selectedDate,
       cycleStartDate: state.cycleStartDate,
+      historyRange: state.historyRange,
       entries: state.entries,
       lastSavedAt: state.lastSavedAt,
       updatedAt: state.updatedAt,
@@ -193,8 +200,8 @@ function persist() {
 
 function render() {
   elements.selectedDate.value = state.selectedDate;
-  elements.cycleStart.value = state.cycleStartDate;
 
+  renderHeroPlan();
   renderTrackerGrid();
   renderSummary();
   renderCadence();
@@ -202,21 +209,77 @@ function render() {
   renderDriveStatus();
 }
 
+function renderHeroPlan() {
+  const selectedWeekday = getWeekdayIndex(state.selectedDate);
+  const numericTracks = TRACKS.filter((track) => track.type === "number");
+  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+
+  elements.heroPlan.innerHTML = `
+    <div class="hero-plan-head">
+      <p class="summary-label">Ежедневный план</p>
+      <p class="hero-plan-date">${formatDate(state.selectedDate)}</p>
+    </div>
+
+    <div class="hero-plan-list">
+      ${numericTracks
+        .map(
+          (track) => `
+            <div class="hero-plan-item">
+              <span class="hero-plan-name">${track.title}</span>
+              <strong>${formatNumber(track.target)}</strong>
+            </div>
+          `,
+        )
+        .join("")}
+    </div>
+
+    <div class="hero-schedule-list">
+      ${checkboxTracks
+        .map((track) => {
+          const activeToday = isTrackPlannedForDate(track, state.selectedDate);
+          return `
+            <div class="hero-schedule-card ${activeToday ? "active" : ""}">
+              <div class="hero-schedule-top">
+                <span class="hero-plan-name">${track.title}</span>
+                <strong>${track.scheduleLabel}</strong>
+              </div>
+              <div class="weekday-row">
+                ${WEEKDAY_LABELS.map(
+                  (label, index) => `
+                    <span
+                      class="weekday-chip ${
+                        track.scheduleDays.includes(index) ? "planned" : ""
+                      } ${selectedWeekday === index ? "selected" : ""} ${
+                        activeToday && selectedWeekday === index ? "active" : ""
+                      }"
+                    >
+                      ${label}
+                    </span>
+                  `,
+                ).join("")}
+              </div>
+            </div>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function renderTrackerGrid() {
   const entry = getEntry(state.selectedDate);
-  const workoutDay = isAlternateWorkoutDay(state.selectedDate, state.cycleStartDate);
 
   elements.trackerGrid.innerHTML = TRACKS.map((track) => {
-    const isAlternate = track.cadence === "alternate";
-    const isAvailable = !isAlternate || workoutDay;
+    const isAvailable = isTrackPlannedForDate(track, state.selectedDate);
     const numericValue =
       track.type === "number" ? formatNumberInput(entry[track.id] ?? 0) : null;
     const checked = isAvailable && Boolean(entry[track.id]);
-    const stamp = isAlternate
-      ? isAvailable
-        ? "Сегодня по плану"
-        : "Сегодня восстановление"
-      : "Ежедневная отметка";
+    const stamp =
+      track.type === "number"
+        ? "Ежедневная отметка"
+        : isAvailable
+          ? "Сегодня по плану"
+          : "Сегодня отдых";
 
     const body =
       track.type === "number"
@@ -301,7 +364,9 @@ function renderTrackerGrid() {
           <p class="history-meta">${
             track.type === "number"
               ? "Любое число сохраняется для выбранной даты."
-              : "Логика через день считается от даты старта цикла."
+              : isAvailable
+                ? "Этот блок входит в план именно на выбранный день."
+                : `Следующая отметка по недельному ритму: ${track.scheduleLabel}.`
           }</p>
         </div>
       </article>
@@ -315,6 +380,7 @@ function renderSummary() {
   const volume = getNumericVolume(entry);
   const streak = getStreakLength(state.selectedDate);
   const activeDays = getRecentActiveDays(state.selectedDate, 7);
+  const focusTrack = getPlannedCheckboxTracks(state.selectedDate)[0] || null;
 
   elements.progressRing.style.setProperty("--progress", stats.percent);
   elements.progressValue.textContent = `${stats.percent}%`;
@@ -323,11 +389,7 @@ function renderSummary() {
   elements.volumeValue.textContent = formatNumber(volume);
   elements.planValue.textContent = `${stats.completed} / ${stats.planned}`;
 
-  const pulse = getPulseCopy(
-    stats.percent,
-    volume,
-    isAlternateWorkoutDay(state.selectedDate, state.cycleStartDate),
-  );
+  const pulse = getPulseCopy(stats.percent, volume, focusTrack);
   elements.dayPulseValue.textContent = pulse.title;
   elements.dayPulseText.textContent = pulse.body;
   elements.heroText.textContent = pulse.hero;
@@ -346,70 +408,168 @@ function renderSummary() {
 }
 
 function renderCadence() {
-  const workoutDay = isAlternateWorkoutDay(state.selectedDate, state.cycleStartDate);
-  const nextWorkoutDate = workoutDay
-    ? state.selectedDate
-    : shiftDate(state.selectedDate, 1);
+  const plannedCheckboxTracks = getPlannedCheckboxTracks(state.selectedDate);
+  const nextBlock = getNextScheduledBlock(state.selectedDate);
 
-  elements.cadenceTitle.textContent = workoutDay
-    ? "Сегодня тренировочный день"
-    : "Сегодня день восстановления";
-  elements.cadenceText.textContent = workoutDay
-    ? "Пресс и плечи стоят в плане на выбранную дату. Отметь их, когда блок завершен."
-    : "Для пресса и плеч на выбранную дату отдых. Следующая отметка будет уже завтра.";
-  elements.nextWorkout.textContent = formatDate(nextWorkoutDate);
-  elements.cycleStartLabel.textContent = formatDate(state.cycleStartDate);
+  if (plannedCheckboxTracks.length) {
+    const [track] = plannedCheckboxTracks;
+    elements.cadenceTitle.textContent = `Сегодня в плане ${track.title.toLowerCase()}`;
+    elements.cadenceText.textContent = `На ${formatDate(state.selectedDate)} в недельном ритме стоит ${track.title.toLowerCase()}. Когда блок закрыт, просто поставьте галочку.`;
+  } else {
+    elements.cadenceTitle.textContent = "Сегодня день восстановления";
+    elements.cadenceText.textContent =
+      "На выбранную дату для пресса и плеч нет отдельного блока. Можно спокойно держать базовый ежедневный объем.";
+  }
+
+  elements.nextWorkout.textContent = nextBlock
+    ? `${formatDate(nextBlock.date, { day: "numeric", month: "short" })} · ${formatTrackList(
+        nextBlock.tracks,
+      )}`
+    : "—";
+  elements.cycleStartLabel.textContent = "Пресс: Вс / Вт / Чт · Плечи: Пн / Ср / Пт";
 }
 
 function renderHistory() {
-  const dates = Array.from({ length: 8 }, (_, index) =>
-    shiftDate(state.selectedDate, -index),
-  );
+  const period = getHistoryPeriod(state.selectedDate, state.historyRange);
 
-  elements.historyGrid.innerHTML = dates
-    .map((date) => {
-      const entry = getEntry(date);
-      const stats = getCompletionStats(date);
-      const workoutDay = isAlternateWorkoutDay(date, state.cycleStartDate);
+  elements.historyRangeCaption.textContent = period.caption;
+  elements.historyGrid.dataset.range = state.historyRange;
+  Array.from(elements.historyRangeSwitch.querySelectorAll("[data-range]")).forEach((button) => {
+    button.classList.toggle("active", button.dataset.range === state.historyRange);
+  });
 
-      return `
-        <article class="history-card">
-          <div class="history-top">
-            <div>
-              <p class="history-badge">${
-                isSameDay(date, getTodayString()) ? "Сегодня" : formatWeekday(date)
-              }</p>
-              <p class="history-date">${formatDate(date, {
-                day: "numeric",
-                month: "short",
-              })}</p>
-            </div>
-            <span class="history-score">${stats.percent}%</span>
-          </div>
+  if (state.historyRange === "year") {
+    elements.historyGrid.innerHTML = period.months
+      .slice()
+      .reverse()
+      .map((month) => renderYearHistoryCard(month))
+      .join("");
+  } else if (state.historyRange === "30d") {
+    elements.historyGrid.innerHTML = period.dates
+      .slice()
+      .reverse()
+      .map((date) => renderCompactHistoryCard(date))
+      .join("");
+  } else {
+    elements.historyGrid.innerHTML = period.dates
+      .slice()
+      .reverse()
+      .map((date) => renderDetailedHistoryCard(date))
+      .join("");
+  }
 
-          <p class="history-meta">
-            ${
-              workoutDay
-                ? "Тренировочный день для пресса и плеч."
-                : "Восстановление для пресса и плеч."
-            }
-          </p>
+  elements.insightGrid.innerHTML = renderInsights(period);
+}
 
-          <div class="history-details">
-            ${renderHistoryLine("Подтягивания", `${formatNumber(entry.pullups || 0)}`)}
-            ${renderHistoryLine("Отжимания", `${formatNumber(entry.pushups || 0)}`)}
-            ${renderHistoryLine("Приседания", `${formatNumber(entry.squats || 0)}`)}
-            ${renderHistoryLine("Шаги", `${formatNumber(entry.steps || 0)}`)}
-            ${renderHistoryLine("Пресс", workoutDay ? (entry.abs ? "Да" : "Нет") : "Отдых")}
-            ${renderHistoryLine(
-              "Плечи",
-              workoutDay ? (entry.shoulders ? "Да" : "Нет") : "Отдых",
-            )}
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+function renderDetailedHistoryCard(date) {
+  const entry = getEntry(date);
+  const stats = getCompletionStats(date);
+  const plannedCheckboxTracks = getPlannedCheckboxTracks(date);
+
+  return `
+    <article class="history-card">
+      <div class="history-top">
+        <div>
+          <p class="history-badge">${
+            isSameDay(date, getTodayString()) ? "Сегодня" : formatWeekday(date)
+          }</p>
+          <p class="history-date">${formatDate(date, {
+            day: "numeric",
+            month: "short",
+          })}</p>
+        </div>
+        <span class="history-score">${stats.percent}%</span>
+      </div>
+
+      <p class="history-meta">${getDayPlanMeta(date, plannedCheckboxTracks)}</p>
+
+      <div class="history-details">
+        ${renderHistoryLine("Подтягивания", `${formatNumber(entry.pullups || 0)}`)}
+        ${renderHistoryLine("Отжимания", `${formatNumber(entry.pushups || 0)}`)}
+        ${renderHistoryLine("Приседания", `${formatNumber(entry.squats || 0)}`)}
+        ${renderHistoryLine("Шаги", `${formatNumber(entry.steps || 0)}`)}
+        ${renderHistoryLine("Пресс", isTrackPlannedForDate(getTrack("abs"), date) ? (entry.abs ? "Да" : "Нет") : "Отдых")}
+        ${renderHistoryLine(
+          "Плечи",
+          isTrackPlannedForDate(getTrack("shoulders"), date) ? (entry.shoulders ? "Да" : "Нет") : "Отдых",
+        )}
+      </div>
+    </article>
+  `;
+}
+
+function renderCompactHistoryCard(date) {
+  const entry = getEntry(date);
+  const stats = getCompletionStats(date);
+  const volume = getNumericVolume(entry);
+  const plannedCheckboxTracks = getPlannedCheckboxTracks(date);
+  const completedExtra = plannedCheckboxTracks
+    .filter((track) => Boolean(entry[track.id]))
+    .map((track) => track.title)
+    .join(", ");
+
+  return `
+    <article class="history-card compact">
+      <div class="history-top">
+        <div>
+          <p class="history-badge">${formatWeekday(date)}</p>
+          <p class="history-date">${formatDate(date, {
+            day: "numeric",
+            month: "short",
+          })}</p>
+        </div>
+        <span class="history-score">${stats.percent}%</span>
+      </div>
+
+      <p class="history-meta">${getDayPlanMeta(date, plannedCheckboxTracks)}</p>
+
+      <div class="history-metric-row">
+        <span>Объем</span>
+        <strong>${formatNumber(volume)}</strong>
+      </div>
+      <div class="history-metric-row">
+        <span>План</span>
+        <strong>${stats.completed} / ${stats.planned}</strong>
+      </div>
+
+      <div class="history-tag-row">
+        <span class="history-tag ${volume > 0 ? "active" : ""}">
+          ${volume > 0 ? "Есть объем" : "Пустой день"}
+        </span>
+        <span class="history-tag ${completedExtra ? "active" : ""}">
+          ${completedExtra || (plannedCheckboxTracks.length ? "Чек-лист не закрыт" : "Без доп. блока")}
+        </span>
+      </div>
+    </article>
+  `;
+}
+
+function renderYearHistoryCard(month) {
+  return `
+    <article class="history-card compact year-card">
+      <div class="history-top">
+        <div>
+          <p class="history-badge">${month.shortLabel}</p>
+          <p class="history-date">${month.yearLabel}</p>
+        </div>
+        <span class="history-score">${month.averagePercent}%</span>
+      </div>
+
+      <p class="history-meta">${month.activeDays} активных из ${month.dayCount} дней</p>
+
+      <div class="history-details">
+        ${renderHistoryLine("Подтягивания", formatNumber(month.numericTotals.pullups))}
+        ${renderHistoryLine("Отжимания", formatNumber(month.numericTotals.pushups))}
+        ${renderHistoryLine("Приседания", formatNumber(month.numericTotals.squats))}
+        ${renderHistoryLine("Шаги", formatNumber(month.numericTotals.steps))}
+        ${renderHistoryLine("Пресс", `${month.checkboxTotals.abs.completed}/${month.checkboxTotals.abs.planned}`)}
+        ${renderHistoryLine(
+          "Плечи",
+          `${month.checkboxTotals.shoulders.completed}/${month.checkboxTotals.shoulders.planned}`,
+        )}
+      </div>
+    </article>
+  `;
 }
 
 function renderHistoryLine(label, value) {
@@ -540,6 +700,22 @@ function handleChipClick(event) {
   renderSummary();
   renderHistory();
   renderDriveStatus();
+}
+
+function handleHistoryRangeClick(event) {
+  const button = event.target.closest("[data-range]");
+  if (!button) {
+    return;
+  }
+
+  const nextRange = sanitizeHistoryRange(button.dataset.range);
+  if (state.historyRange === nextRange) {
+    return;
+  }
+
+  state.historyRange = nextRange;
+  persist();
+  renderHistory();
 }
 
 function handleSaveClick() {
@@ -916,6 +1092,7 @@ function buildCloudPayload() {
     updatedAt,
     lastSavedAt: state.lastSavedAt,
     cycleStartDate: state.cycleStartDate,
+    historyRange: state.historyRange,
     entries: sanitizeEntries(state.entries),
   };
 }
@@ -926,6 +1103,7 @@ function applyCloudPayload(payload, fileId) {
   }
 
   state.cycleStartDate = sanitizeDateInput(payload.cycleStartDate, state.cycleStartDate);
+  state.historyRange = sanitizeHistoryRange(payload.historyRange);
   state.entries = sanitizeEntries(payload.entries);
   state.lastSavedAt = normalizeIso(payload.lastSavedAt);
   state.updatedAt = normalizeIso(payload.updatedAt) || state.updatedAt;
@@ -1044,10 +1222,7 @@ function sanitizeEntries(value) {
 
 function getCompletionStats(date) {
   const entry = getEntry(date);
-  const workoutDay = isAlternateWorkoutDay(date, state.cycleStartDate);
-  const plannedTracks = TRACKS.filter(
-    (track) => track.type === "number" || workoutDay,
-  );
+  const plannedTracks = getPlannedTracks(date);
   const completedTracks = plannedTracks.filter((track) => {
     if (track.type === "number") {
       return sanitizeNumber(entry[track.id]) > 0;
@@ -1097,17 +1272,344 @@ function hasActivity(date) {
   const numericActivity = TRACKS.some(
     (track) => track.type === "number" && sanitizeNumber(entry[track.id]) > 0,
   );
-  const workoutDay = isAlternateWorkoutDay(date, state.cycleStartDate);
-  const checkboxActivity =
-    workoutDay &&
-    TRACKS.some((track) => track.type === "checkbox" && Boolean(entry[track.id]));
+  const checkboxActivity = getPlannedCheckboxTracks(date).some((track) => Boolean(entry[track.id]));
 
   return numericActivity || checkboxActivity;
 }
 
-function isAlternateWorkoutDay(date, cycleStartDate) {
-  const diff = Math.abs(getDayIndex(date) - getDayIndex(cycleStartDate));
-  return diff % 2 === 0;
+function getTrack(trackId) {
+  return TRACKS.find((track) => track.id === trackId);
+}
+
+function getPlannedTracks(date) {
+  return TRACKS.filter((track) => isTrackPlannedForDate(track, date));
+}
+
+function getPlannedCheckboxTracks(date) {
+  return TRACKS.filter(
+    (track) => track.type === "checkbox" && isTrackPlannedForDate(track, date),
+  );
+}
+
+function isTrackPlannedForDate(track, date) {
+  if (track.type === "number") {
+    return true;
+  }
+
+  return Array.isArray(track.scheduleDays) && track.scheduleDays.includes(getWeekdayIndex(date));
+}
+
+function getWeekdayIndex(dateString) {
+  return new Date(`${dateString}T12:00:00`).getDay();
+}
+
+function getNextScheduledBlock(anchorDate) {
+  for (let offset = 1; offset <= 14; offset += 1) {
+    const date = shiftDate(anchorDate, offset);
+    const tracks = getPlannedCheckboxTracks(date);
+    if (tracks.length) {
+      return { date, tracks };
+    }
+  }
+
+  return null;
+}
+
+function formatTrackList(tracks) {
+  return tracks.map((track) => track.title.toLowerCase()).join(" и ");
+}
+
+function getDayPlanMeta(date, plannedCheckboxTracks) {
+  if (plannedCheckboxTracks.length) {
+    return `По плану: ${formatTrackList(plannedCheckboxTracks)}.`;
+  }
+
+  return `По плану только базовый объем на ${formatWeekday(date)}.`;
+}
+
+function getHistoryPeriod(anchorDate, range) {
+  if (range === "year") {
+    const months = Array.from({ length: 12 }, (_, index) => 11 - index).map((index) =>
+      getMonthSummary(anchorDate, index),
+    );
+    const anchorMonth = formatMonthLabel(anchorDate);
+
+    return {
+      type: "year",
+      caption: `12 месяцев до ${anchorMonth.toLowerCase()}.`,
+      months,
+      dayCount: months.reduce((total, month) => total + month.dayCount, 0),
+      dates: months.flatMap((month) => month.dates),
+    };
+  }
+
+  const days = range === "30d" ? 30 : 7;
+  const dates = Array.from({ length: days }, (_, index) =>
+    shiftDate(anchorDate, -(days - 1 - index)),
+  );
+
+  return {
+    type: "days",
+    caption:
+      range === "30d"
+        ? `Последние 30 дней по выбранной дате.`
+        : `Последние 7 дней по выбранной дате.`,
+    dates,
+    dayCount: dates.length,
+  };
+}
+
+function getMonthSummary(anchorDate, offset) {
+  const monthDate = shiftMonth(startOfMonth(anchorDate), -offset);
+  const startDate = monthDate;
+  const rawEndDate = endOfMonth(monthDate);
+  const endDate = offset === 0 ? minDate(rawEndDate, anchorDate) : rawEndDate;
+  const dates = enumerateDates(startDate, endDate);
+  const numericTracks = TRACKS.filter((track) => track.type === "number");
+  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const averagePercent = getAveragePercent(dates);
+
+  return {
+    dates,
+    shortLabel: formatMonthLabel(monthDate, { month: "short" }),
+    yearLabel: formatMonthLabel(monthDate, { year: "numeric" }),
+    averagePercent,
+    activeDays: dates.filter((date) => hasActivity(date)).length,
+    dayCount: dates.length,
+    numericTotals: numericTracks.reduce((accumulator, track) => {
+      accumulator[track.id] = dates.reduce(
+        (total, date) => total + sanitizeNumber(getEntry(date)[track.id]),
+        0,
+      );
+      return accumulator;
+    }, {}),
+    checkboxTotals: checkboxTracks.reduce((accumulator, track) => {
+      const planned = dates.filter((date) => isTrackPlannedForDate(track, date)).length;
+      const completed = dates.filter(
+        (date) => isTrackPlannedForDate(track, date) && Boolean(getEntry(date)[track.id]),
+      ).length;
+      accumulator[track.id] = { planned, completed };
+      return accumulator;
+    }, {}),
+  };
+}
+
+function enumerateDates(startDate, endDate) {
+  const dates = [];
+  let cursor = startDate;
+
+  while (getDayIndex(cursor) <= getDayIndex(endDate)) {
+    dates.push(cursor);
+    cursor = shiftDate(cursor, 1);
+  }
+
+  return dates;
+}
+
+function startOfMonth(dateString) {
+  const [year, month] = dateString.split("-").map(Number);
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+function endOfMonth(dateString) {
+  const [year, month] = dateString.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month, 0));
+  return toDateInputValue(date);
+}
+
+function shiftMonth(dateString, offset) {
+  const [year, month] = dateString.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, 1));
+  date.setUTCMonth(date.getUTCMonth() + offset);
+  return toDateInputValue(date);
+}
+
+function minDate(left, right) {
+  return getDayIndex(left) <= getDayIndex(right) ? left : right;
+}
+
+function renderInsights(period) {
+  return [
+    renderTrendInsight(period),
+    renderVolumeInsight(period),
+    renderDisciplineInsight(period),
+  ].join("");
+}
+
+function renderTrendInsight(period) {
+  const points =
+    period.type === "year"
+      ? period.months.map((month) => ({
+          label: month.shortLabel,
+          value: month.averagePercent,
+        }))
+      : period.dates.map((date) => ({
+          label: state.historyRange === "7d" ? formatWeekday(date) : formatDate(date, { day: "numeric" }),
+          value: getCompletionStats(date).percent,
+        }));
+  const average = getAveragePercent(period.dates);
+  const best = points.reduce(
+    (winner, point) => (point.value > winner.value ? point : winner),
+    points[0] || { label: "—", value: 0 },
+  );
+
+  return `
+    <article class="insight-card panel-soft">
+      <div class="insight-head">
+        <div>
+          <p class="summary-label">Динамика выполнения</p>
+          <h3 class="insight-title">Темп за выбранный период</h3>
+        </div>
+        <strong class="insight-total">${average}%</strong>
+      </div>
+
+      <div class="trend-chart">
+        ${points
+          .map(
+            (point) => `
+              <div class="trend-column">
+                <span class="trend-bar" style="height: ${Math.max(point.value, 6)}%;"></span>
+                <span class="trend-label">${point.label}</span>
+              </div>
+            `,
+          )
+          .join("")}
+      </div>
+
+      <p class="insight-note">
+        Лучший отрезок: <strong>${best.label}</strong> с выполнением <strong>${best.value}%</strong>.
+      </p>
+    </article>
+  `;
+}
+
+function renderVolumeInsight(period) {
+  const numericTracks = TRACKS.filter((track) => track.type === "number");
+
+  return `
+    <article class="insight-card panel-soft">
+      <div class="insight-head">
+        <div>
+          <p class="summary-label">Объем к плану</p>
+          <h3 class="insight-title">Фактический объем против цели</h3>
+        </div>
+      </div>
+
+      <div class="volume-list">
+        ${numericTracks
+          .map((track) => {
+            const actual = period.dates.reduce(
+              (total, date) => total + sanitizeNumber(getEntry(date)[track.id]),
+              0,
+            );
+            const planned = track.target * period.dayCount;
+            const percent = planned === 0 ? 0 : Math.round((actual / planned) * 100);
+            const width = percent === 0 ? 0 : Math.max(8, Math.min(percent, 100));
+
+            return `
+              <div class="volume-row">
+                <div class="volume-top">
+                  <span>${track.title}</span>
+                  <strong>${formatNumber(actual)} / ${formatNumber(planned)}</strong>
+                </div>
+                <div class="volume-track">
+                  <span class="volume-fill" style="width: ${width}%; --fill-color: ${track.accent};"></span>
+                </div>
+                <p class="volume-meta">${percent}% от плана за период</p>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </article>
+  `;
+}
+
+function renderDisciplineInsight(period) {
+  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const activeDays = period.dates.filter((date) => hasActivity(date)).length;
+  const longestStreak = getLongestStreakInRange(period.dates);
+  const averageVolume = Math.round(
+    period.dates.reduce((total, date) => total + getNumericVolume(getEntry(date)), 0) /
+      Math.max(period.dates.length, 1),
+  );
+
+  return `
+    <article class="insight-card panel-soft">
+      <div class="insight-head">
+        <div>
+          <p class="summary-label">Дисциплина режима</p>
+          <h3 class="insight-title">Пресс, плечи и общая ровность</h3>
+        </div>
+      </div>
+
+      <div class="discipline-bars">
+        ${checkboxTracks
+          .map((track) => {
+            const planned = period.dates.filter((date) => isTrackPlannedForDate(track, date)).length;
+            const completed = period.dates.filter(
+              (date) => isTrackPlannedForDate(track, date) && Boolean(getEntry(date)[track.id]),
+            ).length;
+            const percent = planned === 0 ? 0 : Math.round((completed / planned) * 100);
+            const width = percent === 0 ? 0 : Math.max(8, Math.min(percent, 100));
+
+            return `
+              <div class="volume-row">
+                <div class="volume-top">
+                  <span>${track.title}</span>
+                  <strong>${completed} / ${planned}</strong>
+                </div>
+                <div class="volume-track">
+                  <span class="volume-fill" style="width: ${width}%; --fill-color: ${track.accent};"></span>
+                </div>
+                <p class="volume-meta">${percent}% закрытых сессий по расписанию</p>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+
+      <div class="metric-pills">
+        <div class="metric-pill">
+          <span>Активных дней</span>
+          <strong>${activeDays}</strong>
+        </div>
+        <div class="metric-pill">
+          <span>Лучшая серия</span>
+          <strong>${longestStreak}</strong>
+        </div>
+        <div class="metric-pill">
+          <span>Средний объем</span>
+          <strong>${formatNumber(averageVolume)}</strong>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function getAveragePercent(dates) {
+  if (!dates.length) {
+    return 0;
+  }
+
+  const total = dates.reduce((sum, date) => sum + getCompletionStats(date).percent, 0);
+  return Math.round(total / dates.length);
+}
+
+function getLongestStreakInRange(dates) {
+  let longest = 0;
+  let current = 0;
+
+  dates.forEach((date) => {
+    if (hasActivity(date)) {
+      current += 1;
+      longest = Math.max(longest, current);
+    } else {
+      current = 0;
+    }
+  });
+
+  return longest;
 }
 
 function getDayIndex(dateString) {
@@ -1148,6 +1650,10 @@ function sanitizeNumber(value) {
 
 function sanitizeDateInput(value, fallback) {
   return isDateInputValue(value) ? value : fallback;
+}
+
+function sanitizeHistoryRange(value) {
+  return HISTORY_RANGES.includes(value) ? value : "7d";
 }
 
 function isDateInputValue(value) {
@@ -1254,11 +1760,18 @@ function formatDateTime(isoString) {
   }).format(new Date(isoString));
 }
 
+function formatMonthLabel(dateString, options = {}) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    month: "long",
+    ...options,
+  }).format(new Date(`${dateString}T12:00:00`));
+}
+
 function isSameDay(first, second) {
   return first === second;
 }
 
-function getPulseCopy(percent, volume, workoutDay) {
+function getPulseCopy(percent, volume, focusTrack) {
   if (percent >= 100) {
     return {
       title: "План дня закрыт",
@@ -1271,9 +1784,9 @@ function getPulseCopy(percent, volume, workoutDay) {
     return {
       title: "Темп уже хороший",
       body: "Осталось закрыть еще пару направлений, и день будет ощущаться цельным.",
-      hero: workoutDay
-        ? "База уже есть. Если добавить корпус и плечи по плану, день соберется полностью."
-        : "База уже есть. На восстановительном дне особенно важна ровная, спокойная серия.",
+      hero: focusTrack
+        ? `База уже есть. Если закрыть еще и ${focusTrack.title.toLowerCase()}, день соберется полностью.`
+        : "База уже есть. На легком дне особенно важна ровная, спокойная серия.",
     };
   }
 
@@ -1288,9 +1801,9 @@ function getPulseCopy(percent, volume, workoutDay) {
   return {
     title: "Заполни первый блок",
     body: "Начни с одного упражнения или с шагов. Моментум любит простое начало.",
-    hero: workoutDay
-      ? "Сегодня день, когда можно закрыть и базу, и блок корпуса с плечами."
-      : "Сегодня день восстановления для пресса и плеч, так что можно спокойно держать базовый объем.",
+    hero: focusTrack
+      ? `Сегодня в плане еще и ${focusTrack.title.toLowerCase()}, так что день можно закрыть особенно цельно.`
+      : "Сегодня без дополнительного блока, так что можно спокойно держать базовый объем.",
   };
 }
 
