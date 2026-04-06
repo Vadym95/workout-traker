@@ -321,10 +321,11 @@ function renderHeroPlan() {
 
     <div class="hero-plan-list">
       ${numericTracks
-        .map(
-          (track) => `
+        .map((track) => {
+          const trackTitle = escapeHtml(getTrackTitle(track));
+          return `
             <label class="hero-plan-item editable">
-              <span class="hero-plan-name">${track.title}</span>
+              <span class="hero-plan-name">${trackTitle}</span>
               <div class="hero-plan-target-wrap">
                 <input
                   class="hero-plan-target-input"
@@ -334,15 +335,15 @@ function renderHeroPlan() {
                   step="1"
                   value="${formatPlanInput(getTrackTarget(track))}"
                   data-plan-target="${track.id}"
-                  aria-label="${track.title} цель"
+                  aria-label="${trackTitle} цель"
                 />
                 <span class="hero-plan-target-unit">${
                   track.id === "steps" ? "шагов" : "повт."
                 }</span>
               </div>
             </label>
-          `,
-        )
+          `;
+        })
         .join("")}
     </div>
 
@@ -351,10 +352,18 @@ function renderHeroPlan() {
         .map((track) => {
           const activeToday = isTrackPlannedForDate(track, state.selectedDate);
           const scheduleDays = getTrackScheduleDays(track);
+          const trackTitle = escapeHtml(getTrackTitle(track));
           return `
             <div class="hero-schedule-card ${activeToday ? "active" : ""}">
               <div class="hero-schedule-top">
-                <span class="hero-plan-name">${track.title}</span>
+                <input
+                  class="hero-plan-label-input"
+                  type="text"
+                  maxlength="40"
+                  value="${trackTitle}"
+                  data-plan-label="${track.id}"
+                  aria-label="Название блока ${trackTitle}"
+                />
                 <strong>${formatWeekdayList(scheduleDays)}</strong>
               </div>
               <div class="weekday-row">
@@ -384,10 +393,10 @@ function renderHeroPlan() {
     </div>
   `;
 
-  elements.absSchedulePreview.textContent = `Пресс: ${formatWeekdayList(
+  elements.absSchedulePreview.textContent = `${getTrackTitle(getTrack("abs"))}: ${formatWeekdayList(
     getTrackScheduleDays(getTrack("abs")),
   )}`;
-  elements.shouldersSchedulePreview.textContent = `Плечи: ${formatWeekdayList(
+  elements.shouldersSchedulePreview.textContent = `${getTrackTitle(getTrack("shoulders"))}: ${formatWeekdayList(
     getTrackScheduleDays(getTrack("shoulders")),
   )}`;
 }
@@ -396,6 +405,7 @@ function renderTrackerGrid() {
   const entry = getEntry(state.selectedDate);
 
   elements.trackerGrid.innerHTML = TRACKS.map((track) => {
+    const trackTitle = escapeHtml(getTrackTitle(track));
     const isAvailable = isTrackPlannedForDate(track, state.selectedDate);
     const numericValue =
       track.type === "number" ? formatNumberInput(entry[track.id] ?? 0) : null;
@@ -419,7 +429,7 @@ function renderTrackerGrid() {
               type="number"
               value="${numericValue}"
               data-track="${track.id}"
-              aria-label="${track.title}"
+              aria-label="${trackTitle}"
             />
           </div>
           <div class="quick-actions">
@@ -448,7 +458,7 @@ function renderTrackerGrid() {
                   data-track="${track.id}"
                   ${checked ? "checked" : ""}
                   ${isAvailable ? "" : "disabled"}
-                  aria-label="${track.title}"
+                  aria-label="${trackTitle}"
                 />
                 <span class="toggle-track"></span>
               </label>
@@ -478,7 +488,7 @@ function renderTrackerGrid() {
         <div class="tracker-card-header">
           <div>
             <p class="card-kicker">${track.type === "number" ? track.unit : "чек-лист"}</p>
-            <h3 class="card-title">${track.title}</h3>
+            <h3 class="card-title">${trackTitle}</h3>
             <p class="card-description">${track.description}</p>
           </div>
           <span class="card-stamp">${stamp}</span>
@@ -561,8 +571,8 @@ function renderCadence() {
       )}`
     : "—";
   elements.cycleStartLabel.textContent =
-    `Пресс: ${formatWeekdayList(getTrackScheduleDays(getTrack("abs")))} · ` +
-    `Плечи: ${formatWeekdayList(getTrackScheduleDays(getTrack("shoulders")))}`;
+    `${getTrackTitle(getTrack("abs"))}: ${formatWeekdayList(getTrackScheduleDays(getTrack("abs")))} · ` +
+    `${getTrackTitle(getTrack("shoulders"))}: ${formatWeekdayList(getTrackScheduleDays(getTrack("shoulders")))}`;
 }
 
 function renderHistory() {
@@ -624,9 +634,12 @@ function renderDetailedHistoryCard(date) {
         ${renderHistoryLine("Отжимания", `${formatNumber(entry.pushups || 0)}`)}
         ${renderHistoryLine("Приседания", `${formatNumber(entry.squats || 0)}`)}
         ${renderHistoryLine("Шаги", `${formatNumber(entry.steps || 0)}`)}
-        ${renderHistoryLine("Пресс", isTrackPlannedForDate(getTrack("abs"), date) ? (entry.abs ? "Да" : "Нет") : "Отдых")}
         ${renderHistoryLine(
-          "Плечи",
+          escapeHtml(getTrackTitle(getTrack("abs"))),
+          isTrackPlannedForDate(getTrack("abs"), date) ? (entry.abs ? "Да" : "Нет") : "Отдых",
+        )}
+        ${renderHistoryLine(
+          escapeHtml(getTrackTitle(getTrack("shoulders"))),
           isTrackPlannedForDate(getTrack("shoulders"), date) ? (entry.shoulders ? "Да" : "Нет") : "Отдых",
         )}
       </div>
@@ -641,7 +654,7 @@ function renderCompactHistoryCard(date) {
   const plannedCheckboxTracks = getPlannedCheckboxTracks(date);
   const completedExtra = plannedCheckboxTracks
     .filter((track) => Boolean(entry[track.id]))
-    .map((track) => track.title)
+    .map((track) => getTrackTitle(track))
     .join(", ");
 
   return `
@@ -698,9 +711,12 @@ function renderYearHistoryCard(month) {
         ${renderHistoryLine("Отжимания", formatNumber(month.numericTotals.pushups))}
         ${renderHistoryLine("Приседания", formatNumber(month.numericTotals.squats))}
         ${renderHistoryLine("Шаги", formatNumber(month.numericTotals.steps))}
-        ${renderHistoryLine("Пресс", `${month.checkboxTotals.abs.completed}/${month.checkboxTotals.abs.planned}`)}
         ${renderHistoryLine(
-          "Плечи",
+          escapeHtml(getTrackTitle(getTrack("abs"))),
+          `${month.checkboxTotals.abs.completed}/${month.checkboxTotals.abs.planned}`,
+        )}
+        ${renderHistoryLine(
+          escapeHtml(getTrackTitle(getTrack("shoulders"))),
           `${month.checkboxTotals.shoulders.completed}/${month.checkboxTotals.shoulders.planned}`,
         )}
       </div>
@@ -871,15 +887,30 @@ function handleProfileInput(event) {
 
 function handlePlanInput(event) {
   const trackId = event.target.dataset.planTarget;
-  if (!trackId) {
+  if (trackId) {
+    state.plan = sanitizePlan({
+      ...state.plan,
+      targets: {
+        ...state.plan.targets,
+        [trackId]: event.target.value,
+      },
+    });
+    noteCloudChange();
+    persist();
+    render();
+    return;
+  }
+
+  const labelTrackId = event.target.dataset.planLabel;
+  if (!labelTrackId) {
     return;
   }
 
   state.plan = sanitizePlan({
     ...state.plan,
-    targets: {
-      ...state.plan.targets,
-      [trackId]: event.target.value,
+    labels: {
+      ...state.plan.labels,
+      [labelTrackId]: event.target.value,
     },
   });
   noteCloudChange();
@@ -1573,6 +1604,13 @@ function getTrack(trackId) {
   return TRACKS.find((track) => track.id === trackId);
 }
 
+function getTrackTitle(track) {
+  return sanitizePlanLabel(
+    state.plan.labels?.[track.id],
+    track.title,
+  );
+}
+
 function getPlannedTracks(date) {
   return TRACKS.filter((track) => isTrackCountedInPlan(track, date));
 }
@@ -1629,7 +1667,7 @@ function getNextScheduledBlock(anchorDate) {
 }
 
 function formatTrackList(tracks) {
-  return tracks.map((track) => track.title.toLowerCase()).join(" и ");
+  return tracks.map((track) => getTrackTitle(track).toLowerCase()).join(" и ");
 }
 
 function formatWeekdayList(days) {
@@ -1836,7 +1874,7 @@ function renderVolumeInsight(period) {
             return `
               <div class="volume-row">
                 <div class="volume-top">
-                  <span>${track.title}</span>
+                  <span>${escapeHtml(getTrackTitle(track))}</span>
                   <strong>${
                     planned > 0
                       ? `${formatNumber(actual)} / ${formatNumber(planned)}`
@@ -1919,7 +1957,7 @@ function renderLoadDistributionInsight(period) {
     );
     return {
       id: track.id,
-      title: track.title,
+      title: getTrackTitle(track),
       accent: track.accent,
       total: Math.round(total),
     };
@@ -1956,7 +1994,7 @@ function renderLoadDistributionInsight(period) {
               return `
                 <div class="legend-row">
                   <span class="legend-dot" style="--dot-color: ${segment.accent};"></span>
-                  <span class="legend-name">${segment.title}</span>
+                  <span class="legend-name">${escapeHtml(segment.title)}</span>
                   <strong>${share}%</strong>
                 </div>
               `;
@@ -2001,7 +2039,9 @@ function renderDisciplineInsight(period) {
       <div class="insight-head">
         <div>
           <p class="summary-label">Дисциплина режима</p>
-          <h3 class="insight-title">Пресс, плечи и общая ровность</h3>
+          <h3 class="insight-title">${escapeHtml(
+            `${getTrackTitle(getTrack("abs"))}, ${getTrackTitle(getTrack("shoulders"))} и общая ровность`,
+          )}</h3>
         </div>
       </div>
 
@@ -2018,7 +2058,7 @@ function renderDisciplineInsight(period) {
             return `
               <div class="volume-row">
                 <div class="volume-top">
-                  <span>${track.title}</span>
+                  <span>${escapeHtml(getTrackTitle(track))}</span>
                   <strong>${completed} / ${planned}</strong>
                 </div>
                 <div class="volume-track">
@@ -2143,12 +2183,17 @@ function formatProfileInput(value) {
 function sanitizePlan(value) {
   const plan = value && typeof value === "object" ? value : {};
   const rawTargets = plan.targets && typeof plan.targets === "object" ? plan.targets : {};
+  const rawLabels = plan.labels && typeof plan.labels === "object" ? plan.labels : {};
   const rawSchedules =
     plan.schedules && typeof plan.schedules === "object" ? plan.schedules : {};
 
   return {
     targets: TRACKS.filter((track) => track.type === "number").reduce((accumulator, track) => {
       accumulator[track.id] = sanitizePlanTarget(track.id, rawTargets[track.id] ?? track.target);
+      return accumulator;
+    }, {}),
+    labels: TRACKS.filter((track) => track.type === "checkbox").reduce((accumulator, track) => {
+      accumulator[track.id] = sanitizePlanLabel(rawLabels[track.id], track.title);
       return accumulator;
     }, {}),
     schedules: TRACKS.filter((track) => track.type === "checkbox").reduce(
@@ -2161,6 +2206,15 @@ function sanitizePlan(value) {
       {},
     ),
   };
+}
+
+function sanitizePlanLabel(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ").slice(0, 40);
+  return normalized || fallback;
 }
 
 function sanitizePlanTarget(trackId, value) {
@@ -2197,6 +2251,15 @@ function formatPlanInput(value) {
   }
 
   return String(Math.round(number));
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function sanitizeDateInput(value, fallback) {
