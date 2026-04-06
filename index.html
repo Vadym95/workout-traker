@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ритм тренировок</title>
+    <link rel="stylesheet" href="./styles.css" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+  </head>
+  <body>
+    <div class="page-glow page-glow-left" aria-hidden="true"></div>
+    <div class="page-glow page-glow-right" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <section class="hero panel">
+        <div class="hero-copy">
+          <p class="eyebrow">Ежедневный ритм</p>
+          <h1>Трекер, который держит фокус на движении и серии.</h1>
+          <p class="hero-text" id="hero-text">
+            Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
+          </p>
+
+          <div class="hero-actions">
+            <button class="button button-primary" id="save-day" type="button">
+              Зафиксировать день
+            </button>
+            <button class="button button-secondary" id="clear-day" type="button">
+              Очистить запись
+            </button>
+          </div>
+
+          <p class="status-note" id="status-note">
+            Все данные сохраняются прямо в браузере на этом устройстве.
+          </p>
+        </div>
+
+        <div class="hero-meter panel-soft">
+          <div class="progress-ring" id="progress-ring">
+            <div class="progress-ring-inner">
+              <span class="progress-value" id="progress-value">0%</span>
+              <span class="progress-caption">выполнение дня</span>
+            </div>
+          </div>
+
+          <div class="day-pulse" id="day-pulse">
+            <p class="day-pulse-label">Фокус дня</p>
+            <p class="day-pulse-value" id="day-pulse-value">Заполни первый блок</p>
+            <p class="day-pulse-text" id="day-pulse-text">
+              Маленькая отметка сегодня работает лучше, чем идеальный план завтра.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="summary-grid">
+        <article class="summary-card panel-soft">
+          <p class="summary-label">Серия</p>
+          <p class="summary-value" id="streak-value">0</p>
+          <p class="summary-meta">дней подряд с движением</p>
+        </article>
+        <article class="summary-card panel-soft">
+          <p class="summary-label">Активные дни</p>
+          <p class="summary-value" id="active-days-value">0</p>
+          <p class="summary-meta">за последние 7 дней</p>
+        </article>
+        <article class="summary-card panel-soft">
+          <p class="summary-label">Объем сегодня</p>
+          <p class="summary-value" id="volume-value">0</p>
+          <p class="summary-meta">повторов и шагов</p>
+        </article>
+        <article class="summary-card panel-soft">
+          <p class="summary-label">План сегодня</p>
+          <p class="summary-value" id="plan-value">0 / 0</p>
+          <p class="summary-meta">заполненных направлений</p>
+        </article>
+      </section>
+
+      <section class="control-layout">
+        <article class="panel controls-card">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">День и график</p>
+              <h2>Управление записью</h2>
+            </div>
+          </div>
+
+          <div class="controls-grid">
+            <label class="field">
+              <span class="field-label">Дата записи</span>
+              <input id="selected-date" type="date" />
+            </label>
+
+            <label class="field">
+              <span class="field-label">Старт цикла через день</span>
+              <input id="cycle-start" type="date" />
+            </label>
+          </div>
+
+          <p class="field-hint">
+            В день старта цикла пресс и плечи считаются тренировочными, дальше
+            график идет через день.
+          </p>
+
+          <div class="cloud-panel panel-soft">
+            <div class="cloud-head">
+              <div>
+                <p class="eyebrow">Google Drive</p>
+                <h3 class="cloud-title">Облачная история</h3>
+              </div>
+              <span class="sync-pill" id="drive-sync-pill">Локально</span>
+            </div>
+
+            <p class="cloud-status" id="drive-status">
+              Подключите Google Drive, чтобы история не терялась при очистке
+              браузера.
+            </p>
+
+            <div class="hero-actions cloud-actions">
+              <button class="button button-primary" id="drive-connect" type="button">
+                Подключить Google Drive
+              </button>
+              <button class="button button-secondary" id="drive-sync" type="button">
+                Синхронизировать
+              </button>
+              <button class="button button-secondary" id="drive-disconnect" type="button">
+                Отключить
+              </button>
+            </div>
+
+            <p class="field-hint cloud-hint" id="drive-hint">
+              Данные будут храниться в скрытой папке приложения на вашем Google
+              Drive.
+            </p>
+          </div>
+        </article>
+
+        <aside class="panel cadence-card" id="cadence-card">
+          <p class="eyebrow">Ритм корпуса и плеч</p>
+          <h2 id="cadence-title">Сегодня тренировочный день</h2>
+          <p class="cadence-text" id="cadence-text">
+            Отметь выполнение пресса и плеч, если план на сегодня закрыт.
+          </p>
+
+          <div class="cadence-metrics">
+            <div>
+              <span class="cadence-label">Следующая тренировка</span>
+              <strong id="next-workout">-</strong>
+            </div>
+            <div>
+              <span class="cadence-label">Старт цикла</span>
+              <strong id="cycle-start-label">-</strong>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="panel tracker-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Запись за день</p>
+            <h2>Отметь, что уже сделано</h2>
+          </div>
+        </div>
+
+        <div class="tracker-grid" id="tracker-grid"></div>
+      </section>
+
+      <section class="panel history-section">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Последние дни</p>
+            <h2>История прогресса</h2>
+          </div>
+        </div>
+
+        <div class="history-grid" id="history-grid"></div>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="./drive-config.js"></script>
+    <script src="./script.js"></script>
+  </body>
+</html>
