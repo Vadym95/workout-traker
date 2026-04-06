@@ -78,6 +78,7 @@ const elements = {
   progressValue: document.querySelector("#progress-value"),
   heroText: document.querySelector("#hero-text"),
   heroPlan: document.querySelector("#hero-plan"),
+  profilePanel: document.querySelector("#profile-panel"),
   statusNote: document.querySelector("#status-note"),
   dayPulseValue: document.querySelector("#day-pulse-value"),
   dayPulseText: document.querySelector("#day-pulse-text"),
@@ -85,6 +86,8 @@ const elements = {
   activeDaysValue: document.querySelector("#active-days-value"),
   volumeValue: document.querySelector("#volume-value"),
   planValue: document.querySelector("#plan-value"),
+  caloriesValue: document.querySelector("#calories-value"),
+  caloriesMeta: document.querySelector("#calories-meta"),
   cadenceTitle: document.querySelector("#cadence-title"),
   cadenceText: document.querySelector("#cadence-text"),
   nextWorkout: document.querySelector("#next-workout"),
@@ -139,6 +142,7 @@ function init() {
     render();
   });
 
+  elements.profilePanel.addEventListener("change", handleProfileInput);
   elements.trackerGrid.addEventListener("input", handleTrackerInput);
   elements.trackerGrid.addEventListener("click", handleChipClick);
   elements.saveDay.addEventListener("click", handleSaveClick);
@@ -162,6 +166,7 @@ function loadState() {
       selectedDate: sanitizeDateInput(parsed.selectedDate, today),
       cycleStartDate: sanitizeDateInput(parsed.cycleStartDate, today),
       historyRange: sanitizeHistoryRange(parsed.historyRange),
+      profile: sanitizeProfile(parsed.profile),
       entries: sanitizeEntries(parsed.entries),
       lastSavedAt: normalizeIso(parsed.lastSavedAt),
       updatedAt: normalizeIso(parsed.updatedAt) || normalizeIso(parsed.lastSavedAt),
@@ -173,6 +178,7 @@ function loadState() {
       selectedDate: today,
       cycleStartDate: today,
       historyRange: "7d",
+      profile: sanitizeProfile(null),
       entries: {},
       lastSavedAt: null,
       updatedAt: null,
@@ -189,6 +195,7 @@ function persist() {
       selectedDate: state.selectedDate,
       cycleStartDate: state.cycleStartDate,
       historyRange: state.historyRange,
+      profile: state.profile,
       entries: state.entries,
       lastSavedAt: state.lastSavedAt,
       updatedAt: state.updatedAt,
@@ -201,12 +208,97 @@ function persist() {
 function render() {
   elements.selectedDate.value = state.selectedDate;
 
+  renderProfilePanel();
   renderHeroPlan();
   renderTrackerGrid();
   renderSummary();
   renderCadence();
   renderHistory();
   renderDriveStatus();
+}
+
+function renderProfilePanel() {
+  const profileStats = getProfileStats();
+
+  elements.profilePanel.innerHTML = `
+    <div class="profile-head">
+      <div>
+        <p class="summary-label">Личный профиль</p>
+        <h3 class="profile-title">Параметры тела и базовые ориентиры</h3>
+      </div>
+      <p class="profile-note">
+        Рост и вес помогают точнее считать шаги и активные калории, а % жира
+        добавляет ориентир по сухой массе.
+      </p>
+    </div>
+
+    <div class="profile-grid">
+      ${renderProfileField({
+        id: "heightCm",
+        label: "Рост",
+        unit: "см",
+        value: state.profile.heightCm,
+        step: "1",
+      })}
+      ${renderProfileField({
+        id: "weightKg",
+        label: "Вес",
+        unit: "кг",
+        value: state.profile.weightKg,
+        step: "0.1",
+      })}
+      ${renderProfileField({
+        id: "age",
+        label: "Возраст",
+        unit: "лет",
+        value: state.profile.age,
+        step: "1",
+      })}
+      ${renderProfileField({
+        id: "bodyFat",
+        label: "% жира",
+        unit: "%",
+        value: state.profile.bodyFat,
+        step: "0.1",
+      })}
+    </div>
+
+    <div class="profile-stats">
+      <div class="profile-pill">
+        <span>ИМТ</span>
+        <strong>${profileStats.bmiLabel}</strong>
+      </div>
+      <div class="profile-pill">
+        <span>Сухая масса</span>
+        <strong>${profileStats.leanMassLabel}</strong>
+      </div>
+      <div class="profile-pill">
+        <span>Профиль</span>
+        <strong>${profileStats.profileLabel}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderProfileField({ id, label, unit, value, step }) {
+  return `
+    <label class="profile-field">
+      <span class="field-label">${label}</span>
+      <div class="profile-input-wrap">
+        <input
+          class="profile-input"
+          type="number"
+          inputmode="decimal"
+          min="0"
+          step="${step}"
+          value="${formatProfileInput(value)}"
+          data-profile-field="${id}"
+          aria-label="${label}"
+        />
+        <span class="profile-unit">${unit}</span>
+      </div>
+    </label>
+  `;
 }
 
 function renderHeroPlan() {
@@ -381,6 +473,8 @@ function renderSummary() {
   const streak = getStreakLength(state.selectedDate);
   const activeDays = getRecentActiveDays(state.selectedDate, 7);
   const focusTrack = getPlannedCheckboxTracks(state.selectedDate)[0] || null;
+  const calories = getEstimatedCalories(state.selectedDate);
+  const calorieAssumption = getCalorieAssumptionCopy();
 
   elements.progressRing.style.setProperty("--progress", stats.percent);
   elements.progressValue.textContent = `${stats.percent}%`;
@@ -388,6 +482,8 @@ function renderSummary() {
   elements.activeDaysValue.textContent = formatNumber(activeDays);
   elements.volumeValue.textContent = formatNumber(volume);
   elements.planValue.textContent = `${stats.completed} / ${stats.planned}`;
+  elements.caloriesValue.textContent = `~${formatNumber(calories.total)}`;
+  elements.caloriesMeta.textContent = calorieAssumption;
 
   const pulse = getPulseCopy(stats.percent, volume, focusTrack);
   elements.dayPulseValue.textContent = pulse.title;
@@ -716,6 +812,21 @@ function handleHistoryRangeClick(event) {
   state.historyRange = nextRange;
   persist();
   renderHistory();
+}
+
+function handleProfileInput(event) {
+  const field = event.target.dataset.profileField;
+  if (!field) {
+    return;
+  }
+
+  state.profile = sanitizeProfile({
+    ...state.profile,
+    [field]: event.target.value,
+  });
+  noteCloudChange();
+  persist();
+  render();
 }
 
 function handleSaveClick() {
@@ -1093,6 +1204,7 @@ function buildCloudPayload() {
     lastSavedAt: state.lastSavedAt,
     cycleStartDate: state.cycleStartDate,
     historyRange: state.historyRange,
+    profile: state.profile,
     entries: sanitizeEntries(state.entries),
   };
 }
@@ -1104,6 +1216,7 @@ function applyCloudPayload(payload, fileId) {
 
   state.cycleStartDate = sanitizeDateInput(payload.cycleStartDate, state.cycleStartDate);
   state.historyRange = sanitizeHistoryRange(payload.historyRange);
+  state.profile = sanitizeProfile(payload.profile);
   state.entries = sanitizeEntries(payload.entries);
   state.lastSavedAt = normalizeIso(payload.lastSavedAt);
   state.updatedAt = normalizeIso(payload.updatedAt) || state.updatedAt;
@@ -1277,6 +1390,100 @@ function hasActivity(date) {
   return numericActivity || checkboxActivity;
 }
 
+function getProfileStats() {
+  const { heightCm, weightKg, age, bodyFat } = state.profile;
+  const bmi =
+    heightCm > 0 && weightKg > 0 ? weightKg / ((heightCm / 100) * (heightCm / 100)) : null;
+  const leanMass =
+    weightKg > 0 && bodyFat > 0 ? weightKg * (1 - bodyFat / 100) : null;
+
+  return {
+    bmiLabel: bmi ? bmi.toFixed(1) : "—",
+    leanMassLabel: leanMass ? `${leanMass.toFixed(1)} кг` : "—",
+    profileLabel: age > 0 ? `${age} лет` : "Добавьте возраст",
+  };
+}
+
+function getEffectiveProfile() {
+  const heightCm = state.profile.heightCm || 170;
+  const weightKg = state.profile.weightKg || 70;
+
+  return {
+    heightCm,
+    weightKg,
+    age: state.profile.age || 0,
+    bodyFat: state.profile.bodyFat || 0,
+    usesDefaultHeight: state.profile.heightCm === 0,
+    usesDefaultWeight: state.profile.weightKg === 0,
+  };
+}
+
+function getEstimatedCalories(date) {
+  const entry = getEntry(date);
+  const profile = getEffectiveProfile();
+  const breakdown = {
+    pullups: 0,
+    pushups: 0,
+    squats: 0,
+    steps: 0,
+    abs: 0,
+    shoulders: 0,
+  };
+
+  breakdown.pullups = getRepCalories(entry.pullups, profile.weightKg, 4, 8.5);
+  breakdown.pushups = getRepCalories(entry.pushups, profile.weightKg, 2.5, 8);
+  breakdown.squats = getRepCalories(entry.squats, profile.weightKg, 2.8, 5.5);
+  breakdown.steps = getStepCalories(entry.steps, profile.weightKg, profile.heightCm);
+  breakdown.abs =
+    isTrackPlannedForDate(getTrack("abs"), date) && entry.abs
+      ? getSessionCalories(profile.weightKg, 12, 5.5)
+      : 0;
+  breakdown.shoulders =
+    isTrackPlannedForDate(getTrack("shoulders"), date) && entry.shoulders
+      ? getSessionCalories(profile.weightKg, 20, 6.2)
+      : 0;
+
+  return {
+    total: Math.round(
+      Object.values(breakdown).reduce((sum, value) => sum + value, 0),
+    ),
+    breakdown,
+    assumptions: profile,
+  };
+}
+
+function getRepCalories(reps, weightKg, secondsPerRep, met) {
+  const hours = (sanitizeNumber(reps) * secondsPerRep) / 3600;
+  return hours * met * weightKg;
+}
+
+function getSessionCalories(weightKg, minutes, met) {
+  return (minutes / 60) * met * weightKg;
+}
+
+function getStepCalories(steps, weightKg, heightCm) {
+  const distanceKm = sanitizeNumber(steps) * ((heightCm * 0.413) / 100000);
+  return distanceKm * weightKg * 0.75;
+}
+
+function getCalorieAssumptionCopy() {
+  const profile = getEffectiveProfile();
+  const hints = [];
+
+  if (profile.usesDefaultWeight) {
+    hints.push("вес пока взят как 70 кг");
+  }
+  if (profile.usesDefaultHeight) {
+    hints.push("рост пока взят как 170 см");
+  }
+
+  if (!hints.length) {
+    return "примерно активных ккал по вашему профилю";
+  }
+
+  return `примерно активных ккал, ${hints.join(" · ")}`;
+}
+
 function getTrack(trackId) {
   return TRACKS.find((track) => track.id === trackId);
 }
@@ -1431,7 +1638,9 @@ function minDate(left, right) {
 function renderInsights(period) {
   return [
     renderTrendInsight(period),
+    renderCaloriesInsight(period),
     renderVolumeInsight(period),
+    renderLoadDistributionInsight(period),
     renderDisciplineInsight(period),
   ].join("");
 }
@@ -1468,7 +1677,9 @@ function renderTrendInsight(period) {
           .map(
             (point) => `
               <div class="trend-column">
-                <span class="trend-bar" style="height: ${Math.max(point.value, 6)}%;"></span>
+                <span class="trend-bar" style="height: ${
+                  point.value === 0 ? 0 : Math.max(point.value, 6)
+                }%;"></span>
                 <span class="trend-label">${point.label}</span>
               </div>
             `,
@@ -1523,6 +1734,135 @@ function renderVolumeInsight(period) {
       </div>
     </article>
   `;
+}
+
+function renderCaloriesInsight(period) {
+  const points =
+    period.type === "year"
+      ? period.months.map((month) => ({
+          label: month.shortLabel,
+          value: month.dates.reduce((sum, date) => sum + getEstimatedCalories(date).total, 0),
+        }))
+      : period.dates.map((date) => ({
+          label: state.historyRange === "7d" ? formatWeekday(date) : formatDate(date, { day: "numeric" }),
+          value: getEstimatedCalories(date).total,
+        }));
+  const total = points.reduce((sum, point) => sum + point.value, 0);
+  const average = points.length ? Math.round(total / points.length) : 0;
+  const peak = points.reduce(
+    (winner, point) => (point.value > winner.value ? point : winner),
+    points[0] || { label: "—", value: 0 },
+  );
+  const maxValue = Math.max(...points.map((point) => point.value), 0);
+
+  return `
+    <article class="insight-card panel-soft">
+      <div class="insight-head">
+        <div>
+          <p class="summary-label">Калории по периоду</p>
+          <h3 class="insight-title">Активный расход энергии</h3>
+        </div>
+        <strong class="insight-total">${formatNumber(total)}</strong>
+      </div>
+
+      <div class="trend-chart calorie-chart">
+        ${points
+          .map((point) => {
+            const height = maxValue === 0 ? 0 : Math.round((point.value / maxValue) * 100);
+            return `
+              <div class="trend-column">
+                <span class="trend-bar calorie-bar" style="height: ${height === 0 ? 0 : Math.max(height, 8)}%;"></span>
+                <span class="trend-label">${point.label}</span>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+
+      <p class="insight-note">
+        В среднем <strong>${formatNumber(average)} ккал</strong>, пик в <strong>${peak.label}</strong>:
+        <strong>${formatNumber(peak.value)} ккал</strong>.
+      </p>
+    </article>
+  `;
+}
+
+function renderLoadDistributionInsight(period) {
+  const numericTracks = TRACKS.filter((track) => track.type === "number");
+  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const segments = [...numericTracks, ...checkboxTracks].map((track) => {
+    const total = period.dates.reduce(
+      (sum, date) => sum + getEstimatedCalories(date).breakdown[track.id],
+      0,
+    );
+    return {
+      id: track.id,
+      title: track.title,
+      accent: track.accent,
+      total: Math.round(total),
+    };
+  });
+  const grandTotal = segments.reduce((sum, segment) => sum + segment.total, 0);
+  const gradient = buildDistributionGradient(segments, grandTotal);
+
+  return `
+    <article class="insight-card panel-soft">
+      <div class="insight-head">
+        <div>
+          <p class="summary-label">Распределение нагрузки</p>
+          <h3 class="insight-title">Что больше всего дает расход</h3>
+        </div>
+      </div>
+
+      <div class="distribution-layout">
+        <div
+          class="distribution-ring"
+          style="--distribution-bg: ${gradient};"
+        >
+          <div class="distribution-ring-inner">
+            <span>${formatNumber(grandTotal)}</span>
+            <small>ккал</small>
+          </div>
+        </div>
+
+        <div class="distribution-legend">
+          ${segments
+            .filter((segment) => segment.total > 0)
+            .sort((left, right) => right.total - left.total)
+            .map((segment) => {
+              const share = grandTotal === 0 ? 0 : Math.round((segment.total / grandTotal) * 100);
+              return `
+                <div class="legend-row">
+                  <span class="legend-dot" style="--dot-color: ${segment.accent};"></span>
+                  <span class="legend-name">${segment.title}</span>
+                  <strong>${share}%</strong>
+                </div>
+              `;
+            })
+            .join("") || '<p class="insight-note">Пока нет данных для распределения нагрузки.</p>'}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function buildDistributionGradient(segments, grandTotal) {
+  if (grandTotal === 0) {
+    return "conic-gradient(rgba(102, 71, 40, 0.12) 0 100%)";
+  }
+
+  let cursor = 0;
+
+  return `conic-gradient(${segments
+    .filter((segment) => segment.total > 0)
+    .map((segment) => {
+      const share = (segment.total / grandTotal) * 100;
+      const start = cursor;
+      const end = cursor + share;
+      cursor = end;
+      return `${segment.accent} ${start}% ${end}%`;
+    })
+    .join(", ")})`;
 }
 
 function renderDisciplineInsight(period) {
@@ -1646,6 +1986,36 @@ function sanitizeNumber(value) {
   }
 
   return Math.round(number);
+}
+
+function sanitizeProfile(value) {
+  const profile = value && typeof value === "object" ? value : {};
+
+  return {
+    heightCm: sanitizeMetricValue(profile.heightCm, 0, 260),
+    weightKg: sanitizeMetricValue(profile.weightKg, 1, 350),
+    age: sanitizeMetricValue(profile.age, 0, 120),
+    bodyFat: sanitizeMetricValue(profile.bodyFat, 1, 70),
+  };
+}
+
+function sanitizeMetricValue(value, decimals, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  const bounded = Math.min(number, max);
+  const factor = 10 ** decimals;
+  return Math.round(bounded * factor) / factor;
+}
+
+function formatProfileInput(value) {
+  if (!value) {
+    return "";
+  }
+
+  return Number.isInteger(value) ? String(value) : String(value).replace(/\.0$/, "");
 }
 
 function sanitizeDateInput(value, fallback) {
