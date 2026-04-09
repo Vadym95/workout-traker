@@ -770,13 +770,15 @@ function renderTrackerGrid() {
     const isAvailable = isTrackPlannedForDate(track, state.selectedDate);
     const numericValue =
       track.type === "number" ? formatNumberInput(entry[track.id] ?? 0) : null;
-    const checked = isAvailable && Boolean(entry[track.id]);
+    const checked = Boolean(entry[track.id]);
     const stamp =
       track.type === "number"
         ? "Ежедневная отметка"
         : isAvailable
           ? "Сегодня по плану"
-          : "Сегодня отдых";
+          : checked
+            ? "Выполнено вне графика"
+            : "Сегодня отдых";
 
     const body =
       track.type === "number"
@@ -818,23 +820,26 @@ function renderTrackerGrid() {
                   type="checkbox"
                   data-track="${track.id}"
                   ${checked ? "checked" : ""}
-                  ${isAvailable ? "" : "disabled"}
                   aria-label="${trackTitle}"
                 />
                 <span class="toggle-track"></span>
               </label>
               <div class="toggle-copy">
                 <p class="toggle-status">${
-                  isAvailable
-                    ? checked
+                  checked
+                    ? isAvailable
                       ? "Выполнено"
-                      : "Ожидает отметки"
-                    : "День восстановления"
+                      : "Выполнено вне графика"
+                    : isAvailable
+                      ? "Ожидает отметки"
+                      : "День восстановления"
                 }</p>
                 <p class="toggle-hint">${
                   isAvailable
                     ? "Поставь галочку, когда тренировка завершена."
-                    : "Сегодня можно не отмечать этот блок."
+                    : checked
+                      ? "Отметка сохранена, даже если сегодня не был плановый день."
+                      : "Можно оставить отдых, а можно отметить выполнение, если закрыли пропущенную тренировку."
                 }</p>
               </div>
             </div>
@@ -843,7 +848,7 @@ function renderTrackerGrid() {
 
     return `
       <article
-        class="tracker-card ${isAvailable ? "" : "inactive"}"
+        class="tracker-card ${track.type === "checkbox" && !isAvailable && !checked ? "inactive" : ""}"
         style="--card-accent: ${track.accent};"
       >
         <div class="tracker-card-header">
@@ -863,9 +868,11 @@ function renderTrackerGrid() {
               ? "Любое число сохраняется для выбранной даты."
               : isAvailable
                 ? "Этот блок входит в план именно на выбранный день."
-                : `Следующая отметка по недельному ритму: ${formatWeekdayList(
-                    getTrackScheduleDays(track),
-                  )}.`
+                : checked
+                  ? "Отметка сохранена как выполнение вне графика."
+                  : `Следующая отметка по недельному ритму: ${formatWeekdayList(
+                      getTrackScheduleDays(track),
+                    )}.`
           }</p>
         </div>
       </article>
@@ -1013,9 +1020,13 @@ function renderCompactHistoryCard(date) {
   const stats = getCompletionStats(date);
   const volume = getNumericVolume(entry);
   const plannedCheckboxTracks = getPlannedCheckboxTracks(date);
-  const completedExtra = plannedCheckboxTracks
-    .filter((track) => Boolean(entry[track.id]))
-    .map((track) => getTrackTitle(track))
+  const completedCheckboxTracks = getCompletedCheckboxTracks(date);
+  const completedExtra = completedCheckboxTracks
+    .map((track) =>
+      isTrackScheduledForDate(track, date)
+        ? getTrackTitle(track)
+        : `${getTrackTitle(track)} вне графика`,
+    )
     .join(", ");
 
   return `
@@ -1095,11 +1106,13 @@ function renderHistoryTrackLines(date) {
         return renderHistoryLine(escapeHtml(getTrackTitle(track)), formatNumber(entry[track.id] || 0));
       }
 
-      const value = isTrackPlannedForDate(track, date)
-        ? entry[track.id]
+      const value = entry[track.id]
+        ? isTrackPlannedForDate(track, date)
           ? "Да"
-          : "Нет"
-        : "Отдых";
+          : "Да, вне плана"
+        : isTrackPlannedForDate(track, date)
+          ? "Нет"
+          : "Отдых";
       return renderHistoryLine(escapeHtml(getTrackTitle(track)), value);
     })
     .join("");
@@ -1121,10 +1134,12 @@ function renderMonthHistoryLines(month) {
         );
       }
 
-      const totals = month.checkboxTotals[track.id] || { completed: 0, planned: 0 };
+      const totals = month.checkboxTotals[track.id] || { completed: 0, planned: 0, offPlan: 0 };
       return renderHistoryLine(
         escapeHtml(getTrackTitle(track)),
-        `${totals.completed}/${totals.planned}`,
+        totals.offPlan > 0
+          ? `${totals.completed}/${totals.planned} +${totals.offPlan}`
+          : `${totals.completed}/${totals.planned}`,
       );
     })
     .join("");
@@ -2088,7 +2103,9 @@ function hasActivity(date) {
   const numericActivity = getTracks().some(
     (track) => track.type === "number" && sanitizeNumber(entry[track.id]) > 0,
   );
-  const checkboxActivity = getPlannedCheckboxTracks(date).some((track) => Boolean(entry[track.id]));
+  const checkboxActivity = getTracks().some(
+    (track) => track.type === "checkbox" && Boolean(entry[track.id]),
+  );
 
   return numericActivity || checkboxActivity;
 }
@@ -2139,10 +2156,9 @@ function getEstimatedCalories(date) {
       return accumulator;
     }
 
-    accumulator[track.id] =
-      isTrackPlannedForDate(track, date) && entry[track.id]
-        ? getSessionCalories(profile.weightKg, track.sessionMinutes || 15, track.energyMet || 5.5)
-        : 0;
+    accumulator[track.id] = entry[track.id]
+      ? getSessionCalories(profile.weightKg, track.sessionMinutes || 15, track.energyMet || 5.5)
+      : 0;
     return accumulator;
   }, {});
 
@@ -2244,6 +2260,19 @@ function getPlannedCheckboxTracks(date) {
   );
 }
 
+function getCompletedCheckboxTracks(date) {
+  const entry = getEntry(date);
+  return getTracks().filter(
+    (track) => track.type === "checkbox" && Boolean(entry[track.id]),
+  );
+}
+
+function getOffScheduleCompletedCheckboxTracks(date) {
+  return getCompletedCheckboxTracks(date).filter(
+    (track) => !isTrackScheduledForDate(track, date),
+  );
+}
+
 function isTrackPlannedForDate(track, date) {
   if (track.type === "number") {
     return true;
@@ -2302,8 +2331,20 @@ function formatWeekdayList(days) {
 }
 
 function getDayPlanMeta(date, plannedCheckboxTracks) {
+  const offScheduleTracks = getOffScheduleCompletedCheckboxTracks(date);
+
+  if (plannedCheckboxTracks.length && offScheduleTracks.length) {
+    return `По плану: ${formatTrackList(plannedCheckboxTracks)}. Вне графика выполнено: ${formatTrackList(
+      offScheduleTracks,
+    )}.`;
+  }
+
   if (plannedCheckboxTracks.length) {
     return `По плану: ${formatTrackList(plannedCheckboxTracks)}.`;
+  }
+
+  if (offScheduleTracks.length) {
+    return `Вне графика выполнено: ${formatTrackList(offScheduleTracks)}.`;
   }
 
   return `По плану только ежедневные числовые активности на ${formatWeekday(date)}.`;
@@ -2387,7 +2428,10 @@ function getMonthSummary(anchorDate, offset) {
       const completed = dates.filter(
         (date) => isTrackPlannedForDate(track, date) && Boolean(getEntry(date)[track.id]),
       ).length;
-      accumulator[track.id] = { planned, completed };
+      const offPlan = dates.filter(
+        (date) => !isTrackPlannedForDate(track, date) && Boolean(getEntry(date)[track.id]),
+      ).length;
+      accumulator[track.id] = { planned, completed, offPlan };
       return accumulator;
     }, {}),
   };
