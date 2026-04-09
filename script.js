@@ -96,6 +96,7 @@ const elements = {
   selectedDate: document.querySelector("#selected-date"),
   openDatePicker: document.querySelector("#open-date-picker"),
   trackerGrid: document.querySelector("#tracker-grid"),
+  dayNotes: document.querySelector("#day-notes"),
   historyGrid: document.querySelector("#history-grid"),
   insightGrid: document.querySelector("#insight-grid"),
   dashboardShell: document.querySelector("#dashboard-shell"),
@@ -187,6 +188,7 @@ function init() {
   elements.profilePanel.addEventListener("click", handleProfilePanelClick);
   elements.trackerGrid.addEventListener("input", handleTrackerInput);
   elements.trackerGrid.addEventListener("click", handleChipClick);
+  elements.dayNotes.addEventListener("input", handleDayNotesInput);
   elements.saveDay.addEventListener("click", handleSaveClick);
   elements.clearDay.addEventListener("click", handleClearClick);
   elements.driveConnect.addEventListener("click", handleDriveConnect);
@@ -320,6 +322,7 @@ function render() {
   renderProfilePanel();
   renderHeroPlan();
   renderTrackerGrid();
+  renderDayNotes();
   renderSummary();
   renderCadence();
   renderHistory();
@@ -880,6 +883,11 @@ function renderTrackerGrid() {
   }).join("");
 }
 
+function renderDayNotes() {
+  const entry = getEntry(state.selectedDate);
+  elements.dayNotes.value = entry.notes || "";
+}
+
 function renderSummary() {
   const entry = getEntry(state.selectedDate);
   const stats = getCompletionStats(state.selectedDate);
@@ -1243,6 +1251,16 @@ function handleTrackerInput(event) {
   noteCloudChange();
   persist();
   renderSummary();
+  renderHistory();
+  renderDriveStatus();
+}
+
+function handleDayNotesInput(event) {
+  const entry = getEntry(state.selectedDate);
+  entry.notes = sanitizeNotes(event.target.value);
+  state.entries[state.selectedDate] = entry;
+  noteCloudChange();
+  persist();
   renderHistory();
   renderDriveStatus();
 }
@@ -1922,6 +1940,7 @@ function hasMeaningfulCloudData(payload) {
       track.type === "number" ? sanitizeNumber(entry[track.id]) > 0 : Boolean(entry[track.id]),
     ),
   );
+  const hasNotesData = Object.values(entries).some((entry) => sanitizeNotes(entry.notes).length > 0);
 
   const hasProfileData = [profile.heightCm, profile.weightKg, profile.age, profile.bodyFat].some(
     (value) => sanitizeNumber(value) > 0,
@@ -1931,7 +1950,7 @@ function hasMeaningfulCloudData(payload) {
     JSON.stringify(buildTrackComparisonPayload(tracks)) !==
     JSON.stringify(buildTrackComparisonPayload(defaultTracks));
 
-  return hasEntryData || hasProfileData || hasTrackChanges;
+  return hasEntryData || hasNotesData || hasProfileData || hasTrackChanges;
 }
 
 function applyCloudPayload(payload, fileId) {
@@ -2045,7 +2064,7 @@ function sanitizeEntries(value, tracks = sanitizeTracks(null)) {
       cleanEntry[track.id] =
         track.type === "number" ? sanitizeNumber(entry[track.id]) : Boolean(entry[track.id]);
       return cleanEntry;
-    }, {});
+    }, { notes: sanitizeNotes(entry.notes) });
 
     return accumulator;
   }, {});
@@ -2914,7 +2933,15 @@ function buildEmptyEntry(tracks) {
   return tracks.reduce((accumulator, track) => {
     accumulator[track.id] = track.type === "number" ? 0 : false;
     return accumulator;
-  }, {});
+  }, { notes: "" });
+}
+
+function sanitizeNotes(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/\r\n/g, "\n").replace(/\u0000/g, "").slice(0, 2000);
 }
 
 function sanitizeActiveTab(value) {

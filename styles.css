@@ -616,6 +616,51 @@ h2 {
   overflow: hidden;
 }
 
+.notes-card {
+  display: grid;
+  gap: 0.9rem;
+  margin-top: 1rem;
+}
+
+.notes-heading {
+  margin-bottom: 0;
+}
+
+.notes-heading h3 {
+  margin: 0.25rem 0 0;
+  font-size: 1.12rem;
+}
+
+.notes-field {
+  display: block;
+}
+
+.notes-input {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  padding: 1rem 1.05rem;
+  font: inherit;
+  line-height: 1.6;
+}
+
+.notes-input::placeholder {
+  color: var(--text-soft);
+}
+
+.notes-input:focus {
+  outline: 2px solid rgba(242, 197, 122, 0.35);
+  border-color: rgba(242, 197, 122, 0.28);
+}
+
+.notes-hint {
+  margin: 0;
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;

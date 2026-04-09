@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ритм тренировок</title>
-    <link rel="stylesheet" href="./styles.css?v=20260409g" />
+    <link rel="stylesheet" href="./styles.css?v=20260409h" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -186,6 +186,27 @@
             </div>
 
             <div class="tracker-grid" id="tracker-grid"></div>
+
+            <div class="notes-card panel-soft">
+              <div class="section-heading notes-heading">
+                <div>
+                  <p class="eyebrow">Заметки</p>
+                  <h3>Любая важная информация за этот день</h3>
+                </div>
+              </div>
+
+              <label class="notes-field" for="day-notes">
+                <textarea
+                  class="notes-input"
+                  id="day-notes"
+                  placeholder="Например: сделал тренировку позже обычного, болели плечи, был хороший сон, пропустил шаги из-за дождя..."
+                ></textarea>
+              </label>
+
+              <p class="field-hint notes-hint">
+                Заметки сохраняются отдельно для каждой даты и синхронизируются вместе с дневной записью.
+              </p>
+            </div>
           </section>
         </section>
 
@@ -258,7 +279,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./drive-config.js?v=20260409g"></script>
-    <script src="./script.js?v=20260409g"></script>
+    <script src="./drive-config.js?v=20260409h"></script>
+    <script src="./script.js?v=20260409h"></script>
   </body>
 </html>
