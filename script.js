@@ -99,7 +99,6 @@ const elements = {
   historyGrid: document.querySelector("#history-grid"),
   insightGrid: document.querySelector("#insight-grid"),
   dashboardShell: document.querySelector("#dashboard-shell"),
-  accountEmpty: document.querySelector("#account-empty"),
   progressRing: document.querySelector("#progress-ring"),
   progressValue: document.querySelector("#progress-value"),
   heroText: document.querySelector("#hero-text"),
@@ -334,7 +333,6 @@ function hasConnectedAccount() {
 function renderAccessState() {
   const connected = hasConnectedAccount();
   elements.dashboardShell.hidden = !connected;
-  elements.accountEmpty.hidden = connected;
   document.body.classList.toggle("account-gated", !connected);
 }
 
