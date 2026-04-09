@@ -1581,12 +1581,19 @@ body::after {
 .hero {
   position: relative;
   isolation: isolate;
-  grid-template-columns: minmax(0, 1.06fr) minmax(340px, 0.94fr);
+  grid-template-columns: minmax(0, 1.24fr) minmax(320px, 0.76fr);
   gap: 1.1rem;
   overflow: hidden;
   background:
     radial-gradient(circle at top right, rgba(212, 169, 95, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(20, 23, 28, 0.98), rgba(9, 11, 14, 0.99));
+}
+
+.hero-side-stack {
+  display: grid;
+  gap: 1rem;
+  align-content: start;
+  min-width: 0;
 }
 
 .hero::before,
@@ -2064,6 +2071,28 @@ h2 {
   background:
     linear-gradient(180deg, rgba(18, 21, 25, 0.98), rgba(10, 12, 15, 0.99)),
     radial-gradient(circle at top right, rgba(212, 169, 95, 0.08), transparent 34%);
+}
+
+.hero-side-stack .controls-card,
+.hero-side-stack .cadence-card {
+  min-height: 100%;
+}
+
+.hero-side-stack .section-heading {
+  margin-bottom: 1rem;
+}
+
+.hero-side-stack .controls-grid {
+  grid-template-columns: 1fr;
+  gap: 0.85rem;
+}
+
+.hero-side-stack .field-hint {
+  margin: 0.85rem 0 0;
+}
+
+.hero-side-stack .cadence-metrics {
+  margin-top: 1rem;
 }
 
 .range-switch {
@@ -2661,6 +2690,10 @@ h2 {
     grid-template-columns: 1fr;
   }
 
+  .hero-side-stack .controls-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .hero-main-grid {
     grid-template-columns: 1fr;
   }
@@ -2710,6 +2743,10 @@ h2 {
 
   .hero-main-grid,
   .hero-support-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-side-stack .controls-grid {
     grid-template-columns: 1fr;
   }
 

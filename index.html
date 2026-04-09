@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ритм тренировок</title>
-    <link rel="stylesheet" href="./styles.css?v=20260409j" />
+    <link rel="stylesheet" href="./styles.css?v=20260409k" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -130,59 +130,59 @@
                 </div>
               </div>
             </div>
-          </section>
 
-          <section class="control-layout">
-            <article class="panel controls-card">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">День и ритм</p>
-                  <h2>Управление записью</h2>
-                </div>
-              </div>
-
-              <div class="controls-grid">
-                <label class="field">
-                  <span class="field-label">Дата записи</span>
-                  <div class="date-control">
-                    <input id="selected-date" type="date" />
-                    <button class="date-picker-button" id="open-date-picker" type="button">
-                      Выбрать день
-                    </button>
+            <div class="hero-side-stack">
+              <article class="panel controls-card">
+                <div class="section-heading">
+                  <div>
+                    <p class="eyebrow">День и ритм</p>
+                    <h2>Управление записью</h2>
                   </div>
-                </label>
-
-                <div class="field field-static">
-                  <span class="field-label">Тренировки по дням</span>
-                  <div class="field-static-box schedule-preview-list" id="schedule-preview-list"></div>
                 </div>
-              </div>
 
-              <p class="field-hint">
-                Здесь отмечается только выполнение за выбранную дату. Настройка
-                состава тренировок и дней недели теперь находится во вкладке
-                «Профиль».
-              </p>
-            </article>
+                <div class="controls-grid">
+                  <label class="field">
+                    <span class="field-label">Дата записи</span>
+                    <div class="date-control">
+                      <input id="selected-date" type="date" />
+                      <button class="date-picker-button" id="open-date-picker" type="button">
+                        Выбрать день
+                      </button>
+                    </div>
+                  </label>
 
-            <aside class="panel cadence-card" id="cadence-card">
-              <p class="eyebrow">Ритм по дням</p>
-              <h2 id="cadence-title">Сегодня в плане есть тренировка</h2>
-              <p class="cadence-text" id="cadence-text">
-                Отметь дополнительные активности, которые стоят в плане на выбранную дату.
-              </p>
-
-              <div class="cadence-metrics">
-                <div>
-                  <span class="cadence-label">Следующий блок</span>
-                  <strong id="next-workout">-</strong>
+                  <div class="field field-static">
+                    <span class="field-label">Тренировки по дням</span>
+                    <div class="field-static-box schedule-preview-list" id="schedule-preview-list"></div>
+                  </div>
                 </div>
-                <div>
-                  <span class="cadence-label">Ритм недели</span>
-                  <strong id="cycle-start-label">-</strong>
+
+                <p class="field-hint">
+                  Здесь отмечается только выполнение за выбранную дату. Настройка
+                  состава тренировок и дней недели теперь находится во вкладке
+                  «Профиль».
+                </p>
+              </article>
+
+              <aside class="panel cadence-card" id="cadence-card">
+                <p class="eyebrow">Ритм по дням</p>
+                <h2 id="cadence-title">Сегодня в плане есть тренировка</h2>
+                <p class="cadence-text" id="cadence-text">
+                  Отметь дополнительные активности, которые стоят в плане на выбранную дату.
+                </p>
+
+                <div class="cadence-metrics">
+                  <div>
+                    <span class="cadence-label">Следующий блок</span>
+                    <strong id="next-workout">-</strong>
+                  </div>
+                  <div>
+                    <span class="cadence-label">Ритм недели</span>
+                    <strong id="cycle-start-label">-</strong>
+                  </div>
                 </div>
-              </div>
-            </aside>
+              </aside>
+            </div>
           </section>
 
           <section class="panel tracker-section">
@@ -287,7 +287,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./drive-config.js?v=20260409j"></script>
-    <script src="./script.js?v=20260409j"></script>
+    <script src="./drive-config.js?v=20260409k"></script>
+    <script src="./script.js?v=20260409k"></script>
   </body>
 </html>
