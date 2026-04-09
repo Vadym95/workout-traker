@@ -913,8 +913,8 @@ h2 {
 
 .tracker-card-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
+  grid-template-columns: 1fr;
+  gap: 0.75rem;
   align-items: flex-start;
 }
 
@@ -971,7 +971,7 @@ h2 {
 
 .toggle-wrap {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 0.9rem;
   margin-top: 0.3rem;
 }
@@ -1026,11 +1026,13 @@ h2 {
 .toggle-copy {
   display: grid;
   gap: 0.2rem;
+  min-width: 0;
 }
 
 .toggle-status {
   margin: 0;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .toggle-hint,
@@ -1038,6 +1040,7 @@ h2 {
   margin: 0;
   color: var(--text-soft);
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .card-stamp {
@@ -1045,7 +1048,9 @@ h2 {
   align-items: center;
   justify-content: flex-start;
   gap: 0.35rem;
-  max-width: 10.5rem;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
   padding: 0.5rem 0.8rem;
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.74);
@@ -2985,11 +2990,6 @@ h2 {
   .schedule-preview-item {
     grid-template-columns: 1fr;
     display: grid;
-  }
-
-  .tracker-card-header {
-    grid-template-columns: 1fr;
-    gap: 0.8rem;
   }
 
   .card-stamp {
