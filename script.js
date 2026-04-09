@@ -755,7 +755,7 @@ function renderTrackerGrid() {
     elements.trackerGrid.innerHTML = `
       <article class="tracker-card inactive">
         <div class="tracker-card-header">
-          <div>
+          <div class="tracker-card-copy">
             <p class="card-kicker">Пустой план</p>
             <h3 class="card-title">Добавьте первую активность во вкладке «Профиль»</h3>
             <p class="card-description">
@@ -855,7 +855,7 @@ function renderTrackerGrid() {
         style="--card-accent: ${track.accent};"
       >
         <div class="tracker-card-header">
-          <div>
+          <div class="tracker-card-copy">
             <p class="card-kicker">${track.type === "number" ? getTrackUnit(track) : "чек-лист"}</p>
             <h3 class="card-title">${trackTitle}</h3>
             <p class="card-description">${getTrackDescription(track)}</p>
