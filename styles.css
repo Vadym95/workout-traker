@@ -1796,12 +1796,35 @@ h2 {
 
 .hero-meter {
   align-content: start;
-  gap: 0.9rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.05rem;
   background:
     linear-gradient(180deg, rgba(11, 13, 16, 0.98), rgba(17, 20, 24, 0.96)),
     radial-gradient(circle at top right, rgba(212, 169, 95, 0.12), transparent 34%);
   border: 1px solid rgba(212, 169, 95, 0.14);
+}
+
+.hero-main-grid {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.78fr) minmax(0, 1.22fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.hero-focus-column,
+.hero-plan-column,
+.hero-support-grid,
+.hero-inline-copy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.hero-focus-column {
+  align-content: start;
+}
+
+.hero-plan-column {
+  min-width: 0;
 }
 
 .hero-plan,
@@ -1982,7 +2005,8 @@ h2 {
 }
 
 .progress-ring {
-  width: min(100%, 258px);
+  width: min(100%, 216px);
+  margin: 0;
   background:
     conic-gradient(
       var(--primary) 0 calc(var(--progress, 0) * 1%),
@@ -2273,20 +2297,38 @@ h2 {
 }
 
 .hero-inline-top {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.85rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.9rem 1rem;
   align-items: start;
 }
 
+.hero-inline-copy {
+  flex: 1 1 320px;
+  min-width: 0;
+}
+
 .hero-inline-text {
-  margin: 0.2rem 0 0;
-  max-width: 30rem;
+  margin: 0;
+  max-width: 42rem;
 }
 
 .hero-inline-actions {
+  flex: 0 1 520px;
   justify-content: flex-end;
   align-items: stretch;
+}
+
+.hero-inline-actions .button {
+  flex: 1 1 210px;
+  min-width: 0;
+}
+
+.status-note {
+  min-height: 3.2rem;
+  display: flex;
+  align-items: center;
 }
 
 .account-empty {
@@ -2586,6 +2628,7 @@ h2 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .hero-main-grid,
   .control-layout,
   .tracker-grid,
   .history-grid,
@@ -2600,6 +2643,14 @@ h2 {
   .training-columns,
   .track-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hero-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-support-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .account-top-grid,
@@ -2641,6 +2692,11 @@ h2 {
     font-size: clamp(2.55rem, 13vw, 4.2rem);
   }
 
+  .hero-main-grid,
+  .hero-support-grid {
+    grid-template-columns: 1fr;
+  }
+
   .hero-plan-target-wrap {
     flex: 0 0 150px;
     min-width: 150px;
@@ -2670,6 +2726,15 @@ h2 {
 
   .hero-actions {
     display: grid;
+  }
+
+  .hero-inline-actions {
+    width: 100%;
+  }
+
+  .progress-ring {
+    width: min(100%, 188px);
+    margin: 0 auto;
   }
 
   .account-top {

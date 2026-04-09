@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ритм тренировок</title>
-    <link rel="stylesheet" href="./styles.css?v=20260409h" />
+    <link rel="stylesheet" href="./styles.css?v=20260409i" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -75,7 +75,7 @@
           <section class="hero panel">
             <div class="hero-meter panel-soft">
               <div class="hero-inline-top">
-                <div>
+                <div class="hero-inline-copy">
                   <p class="eyebrow">Ежедневный ритм</p>
                   <p class="hero-text hero-inline-text" id="hero-text">
                     Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
@@ -92,35 +92,43 @@
                 </div>
               </div>
 
-              <div class="hero-plan" id="hero-plan"></div>
+              <div class="hero-main-grid">
+                <div class="hero-focus-column">
+                  <div class="progress-ring" id="progress-ring">
+                    <div class="progress-ring-inner">
+                      <span class="progress-value" id="progress-value">0%</span>
+                      <span class="progress-caption">выполнение дня</span>
+                    </div>
+                  </div>
 
-              <div class="progress-ring" id="progress-ring">
-                <div class="progress-ring-inner">
-                  <span class="progress-value" id="progress-value">0%</span>
-                  <span class="progress-caption">выполнение дня</span>
+                  <div class="hero-support-grid">
+                    <div class="day-pulse" id="day-pulse">
+                      <p class="day-pulse-label">Фокус дня</p>
+                      <p class="day-pulse-value" id="day-pulse-value">Заполни первый блок</p>
+                      <p class="day-pulse-text" id="day-pulse-text">
+                        Маленькая отметка сегодня работает лучше, чем идеальный план завтра.
+                      </p>
+                    </div>
+
+                    <div class="burn-card" id="burn-card">
+                      <p class="summary-label">Сожжено сегодня</p>
+                      <p class="burn-value" id="today-burn-value">~0 ккал</p>
+                      <p class="burn-meta" id="today-burn-meta">примерно активных ккал за выбранную дату</p>
+                      <p class="burn-breakdown" id="today-burn-breakdown">
+                        Пока нет активности на эту дату.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="hero-plan-column">
+                  <div class="hero-plan" id="hero-plan"></div>
+
+                  <p class="status-note" id="status-note">
+                    Все данные сохраняются прямо в браузере на этом устройстве.
+                  </p>
                 </div>
               </div>
-
-              <div class="day-pulse" id="day-pulse">
-                <p class="day-pulse-label">Фокус дня</p>
-                <p class="day-pulse-value" id="day-pulse-value">Заполни первый блок</p>
-                <p class="day-pulse-text" id="day-pulse-text">
-                  Маленькая отметка сегодня работает лучше, чем идеальный план завтра.
-                </p>
-              </div>
-
-              <div class="burn-card" id="burn-card">
-                <p class="summary-label">Сожжено сегодня</p>
-                <p class="burn-value" id="today-burn-value">~0 ккал</p>
-                <p class="burn-meta" id="today-burn-meta">примерно активных ккал за выбранную дату</p>
-                <p class="burn-breakdown" id="today-burn-breakdown">
-                  Пока нет активности на эту дату.
-                </p>
-              </div>
-
-              <p class="status-note" id="status-note">
-                Все данные сохраняются прямо в браузере на этом устройстве.
-              </p>
             </div>
           </section>
 
@@ -279,7 +287,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./drive-config.js?v=20260409h"></script>
-    <script src="./script.js?v=20260409h"></script>
+    <script src="./drive-config.js?v=20260409i"></script>
+    <script src="./script.js?v=20260409i"></script>
   </body>
 </html>
