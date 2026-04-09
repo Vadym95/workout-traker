@@ -172,6 +172,11 @@ let driveBootstrapTimer = null;
 init();
 
 function init() {
+  const hashTab = getHashTab();
+  if (hashTab) {
+    state.activeTab = hashTab;
+  }
+
   elements.selectedDate.value = state.selectedDate;
 
   elements.selectedDate.addEventListener("input", handleSelectedDateChange);
@@ -192,6 +197,7 @@ function init() {
   elements.tabButtons.forEach((button) => {
     button.addEventListener("click", handleTabChange);
   });
+  window.addEventListener("hashchange", handleTabHashChange);
 
   render();
   bootstrapDrive();
@@ -333,8 +339,13 @@ function renderAccessState() {
 }
 
 function renderTabs() {
+  if (elements.dashboardShell) {
+    elements.dashboardShell.dataset.activeTab = state.activeTab;
+  }
+
   elements.tabButtons.forEach((button) => {
     button.classList.toggle("active", button.dataset.tabButton === state.activeTab);
+    button.setAttribute("aria-pressed", button.dataset.tabButton === state.activeTab ? "true" : "false");
   });
 
   if (elements.dailyTab) {
@@ -1260,15 +1271,56 @@ function handleHistoryRangeClick(event) {
 }
 
 function handleTabChange(event) {
-  const button = event.currentTarget;
+  const button = event.currentTarget?.dataset?.tabButton
+    ? event.currentTarget
+    : event.target.closest("[data-tab-button]");
+  if (!button) {
+    return;
+  }
+
   const nextTab = sanitizeActiveTab(button.dataset.tabButton);
   if (state.activeTab === nextTab) {
+    syncTabHash(nextTab);
     return;
   }
 
   state.activeTab = nextTab;
   persist();
-  renderTabs();
+  syncTabHash(nextTab);
+  render();
+}
+
+function handleTabHashChange() {
+  const hashTab = getHashTab();
+  if (!hashTab || state.activeTab === hashTab) {
+    return;
+  }
+
+  state.activeTab = hashTab;
+  persist();
+  render();
+}
+
+function getHashTab() {
+  const value = window.location.hash.replace(/^#/, "").trim();
+  return TAB_IDS.includes(value) ? value : "";
+}
+
+function syncTabHash(tab) {
+  if (!TAB_IDS.includes(tab)) {
+    return;
+  }
+
+  const nextHash = `#${tab}`;
+  if (window.location.hash === nextHash) {
+    return;
+  }
+
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}${nextHash}`,
+  );
 }
 
 function handleProfilePanelInput(event) {
