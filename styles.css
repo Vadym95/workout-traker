@@ -977,8 +977,11 @@ h2 {
 }
 
 .toggle {
+  display: block;
+  flex: 0 0 72px;
   position: relative;
   width: 72px;
+  min-width: 72px;
   height: 40px;
 }
 
@@ -1025,6 +1028,7 @@ h2 {
 
 .toggle-copy {
   display: grid;
+  flex: 1 1 auto;
   gap: 0.2rem;
   min-width: 0;
 }
