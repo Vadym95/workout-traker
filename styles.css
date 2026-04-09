@@ -2198,13 +2198,23 @@ h2 {
 .account-top .cloud-actions {
   margin-top: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.65rem;
+  align-items: stretch;
+}
+
+.account-top .cloud-actions .button-primary {
+  grid-column: 1 / -1;
+}
+
+.account-top .cloud-actions .button[hidden] {
+  display: none;
 }
 
 .account-top .button {
   min-height: 3.2rem;
   padding: 0.85rem 1rem;
+  width: 100%;
 }
 
 .account-top .cloud-hint {

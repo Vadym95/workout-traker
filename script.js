@@ -1198,6 +1198,8 @@ function renderDriveStatus() {
   elements.driveAccountEmail.textContent = drive.accountEmail || "-";
   elements.driveAccountNote.textContent = accountNote;
 
+  elements.driveSync.hidden = !connected;
+  elements.driveDisconnect.hidden = !connected;
   elements.driveConnect.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
   elements.driveSync.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
   elements.driveDisconnect.disabled = !connected || drive.isSyncing;
