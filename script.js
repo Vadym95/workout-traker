@@ -71,9 +71,12 @@ const TRACKS = [
 
 const elements = {
   selectedDate: document.querySelector("#selected-date"),
+  openDatePicker: document.querySelector("#open-date-picker"),
   trackerGrid: document.querySelector("#tracker-grid"),
   historyGrid: document.querySelector("#history-grid"),
   insightGrid: document.querySelector("#insight-grid"),
+  dashboardShell: document.querySelector("#dashboard-shell"),
+  accountEmpty: document.querySelector("#account-empty"),
   progressRing: document.querySelector("#progress-ring"),
   progressValue: document.querySelector("#progress-value"),
   heroText: document.querySelector("#hero-text"),
@@ -130,6 +133,7 @@ const drive = {
   accountEmail: "",
   accountName: "",
   userInfoEndpoint: "",
+  sessionResolved: false,
 };
 
 let toastTimer = null;
@@ -141,11 +145,9 @@ init();
 function init() {
   elements.selectedDate.value = state.selectedDate;
 
-  elements.selectedDate.addEventListener("input", (event) => {
-    state.selectedDate = event.target.value || getTodayString();
-    persist();
-    render();
-  });
+  elements.selectedDate.addEventListener("input", handleSelectedDateChange);
+  elements.selectedDate.addEventListener("change", handleSelectedDateChange);
+  elements.openDatePicker.addEventListener("click", handleOpenDatePicker);
 
   elements.profilePanel.addEventListener("change", handleProfileInput);
   elements.heroPlan.addEventListener("change", handlePlanInput);
@@ -225,6 +227,33 @@ function render() {
   renderCadence();
   renderHistory();
   renderDriveStatus();
+}
+
+function hasConnectedAccount() {
+  return Boolean((drive.accountEmail || drive.accessToken) && drive.sessionResolved);
+}
+
+function renderAccessState() {
+  const connected = hasConnectedAccount();
+  elements.dashboardShell.hidden = !connected;
+  elements.accountEmpty.hidden = connected;
+  document.body.classList.toggle("account-gated", !connected);
+}
+
+function handleSelectedDateChange(event) {
+  state.selectedDate = event.target.value || getTodayString();
+  persist();
+  render();
+}
+
+function handleOpenDatePicker() {
+  if (typeof elements.selectedDate.showPicker === "function") {
+    elements.selectedDate.showPicker();
+    return;
+  }
+
+  elements.selectedDate.focus();
+  elements.selectedDate.click();
 }
 
 function renderProfilePanel() {
@@ -814,6 +843,7 @@ function renderDriveStatus() {
   elements.driveConnect.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
   elements.driveSync.disabled = openedAsFile || !drive.configured || !drive.scriptReady;
   elements.driveDisconnect.disabled = !connected || drive.isSyncing;
+  renderAccessState();
 }
 
 function handleTrackerInput(event) {
@@ -1014,6 +1044,7 @@ function handleDriveDisconnect() {
   drive.lastError = "";
   drive.accountEmail = "";
   drive.accountName = "";
+  drive.sessionResolved = false;
   window.clearTimeout(autoSyncTimer);
   renderDriveStatus();
   showToast("Google Drive отключен. Локальная копия осталась на месте.");
@@ -1099,6 +1130,9 @@ function requestDriveAccess(action) {
 
   drive.pendingAction = action;
   drive.lastError = "";
+  if (action === "connect") {
+    drive.sessionResolved = false;
+  }
   renderDriveStatus();
 
   const prompt = drive.accessToken ? "" : "consent";
@@ -1141,6 +1175,7 @@ async function connectDriveAndReconcile() {
 
     if (!remote) {
       await uploadCloudPayload(buildCloudPayload());
+      drive.sessionResolved = true;
       state.cloudLastSyncedAt = new Date().toISOString();
       persist();
       render();
@@ -1155,6 +1190,7 @@ async function connectDriveAndReconcile() {
     const remoteHasData = hasMeaningfulCloudData(remote.payload);
 
     if (!localHasData && remoteHasData) {
+      drive.sessionResolved = true;
       applyCloudPayload(remote.payload, remote.fileId);
       showToast("Google Drive подключен. Загружена облачная история.");
       return;
@@ -1162,6 +1198,7 @@ async function connectDriveAndReconcile() {
 
     if (localHasData && !remoteHasData) {
       await uploadCloudPayload(buildCloudPayload());
+      drive.sessionResolved = true;
       state.cloudLastSyncedAt = new Date().toISOString();
       persist();
       render();
@@ -1171,6 +1208,7 @@ async function connectDriveAndReconcile() {
 
     if (compareIsoDates(localPayload.updatedAt, remote.payload?.updatedAt) >= 0) {
       await uploadCloudPayload(buildCloudPayload());
+      drive.sessionResolved = true;
       state.cloudLastSyncedAt = new Date().toISOString();
       persist();
       render();
@@ -1178,6 +1216,7 @@ async function connectDriveAndReconcile() {
       return;
     }
 
+    drive.sessionResolved = true;
     applyCloudPayload(remote.payload, remote.fileId);
     showToast("Google Drive подключен. Загружена более новая облачная история.");
   } catch (error) {
@@ -1205,6 +1244,7 @@ async function syncToDrive({ silent }) {
   try {
     const payload = buildCloudPayload();
     await uploadCloudPayload(payload);
+    drive.sessionResolved = true;
     state.cloudLastSyncedAt = new Date().toISOString();
     persist();
     render();

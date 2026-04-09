@@ -2134,7 +2134,80 @@ h2 {
   box-shadow: 0 24px 54px rgba(0, 0, 0, 0.34);
 }
 
+.account-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.02fr) minmax(320px, 0.98fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.account-top-copy {
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+}
+
+.account-cloud-panel {
+  margin-top: 0;
+}
+
+.account-empty {
+  margin-top: 1rem;
+  min-height: 260px;
+  display: grid;
+  align-content: center;
+  gap: 1rem;
+  background:
+    linear-gradient(180deg, rgba(18, 21, 25, 0.98), rgba(10, 12, 15, 0.99)),
+    radial-gradient(circle at top right, rgba(212, 169, 95, 0.08), transparent 36%);
+}
+
+.dashboard-shell {
+  display: grid;
+  gap: 0;
+  margin-top: 1rem;
+}
+
+.date-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.field input[type="date"] {
+  min-height: 54px;
+}
+
+.date-picker-button {
+  appearance: none;
+  min-height: 54px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.date-picker-button:hover {
+  transform: translateY(-2px);
+  border-color: rgba(242, 197, 122, 0.24);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.date-picker-button:focus-visible {
+  outline: 2px solid rgba(242, 197, 122, 0.65);
+  outline-offset: 2px;
+}
+
 @media (max-width: 1080px) {
+  .account-top,
   .hero {
     grid-template-columns: 1fr;
   }
@@ -2168,6 +2241,7 @@ h2 {
 }
 
 @media (max-width: 780px) {
+  .account-top,
   .hero,
   .summary-grid,
   .control-layout,
@@ -2202,6 +2276,10 @@ h2 {
   .hero-plan-target-wrap {
     flex: 0 0 150px;
     min-width: 150px;
+  }
+
+  .date-control {
+    grid-template-columns: 1fr;
   }
 
   .hero-schedule-top {
