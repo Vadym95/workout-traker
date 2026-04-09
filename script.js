@@ -99,6 +99,7 @@ const elements = {
   dayNotes: document.querySelector("#day-notes"),
   historyGrid: document.querySelector("#history-grid"),
   insightGrid: document.querySelector("#insight-grid"),
+  previewShell: document.querySelector("#preview-shell"),
   dashboardShell: document.querySelector("#dashboard-shell"),
   progressRing: document.querySelector("#progress-ring"),
   progressValue: document.querySelector("#progress-value"),
@@ -133,6 +134,10 @@ const elements = {
   driveAccountWrap: document.querySelector("#drive-account-wrap"),
   driveAccountEmail: document.querySelector("#drive-account-email"),
   driveAccountNote: document.querySelector("#drive-account-note"),
+  previewTabButtons: Array.from(document.querySelectorAll("[data-preview-tab-button]")),
+  previewDailyTab: document.querySelector("#preview-tab-daily"),
+  previewProfileTab: document.querySelector("#preview-tab-profile"),
+  previewProgressTab: document.querySelector("#preview-tab-progress"),
   tabButtons: Array.from(document.querySelectorAll("[data-tab-button]")),
   dailyTab: document.querySelector("#tab-daily"),
   profileTab: document.querySelector("#tab-profile"),
@@ -145,6 +150,7 @@ const elements = {
 const state = loadState();
 const ui = {
   newTrack: createNewTrackDraft(),
+  previewTab: "daily",
 };
 
 const drive = {
@@ -197,6 +203,9 @@ function init() {
   elements.historyRangeSwitch.addEventListener("click", handleHistoryRangeClick);
   elements.tabButtons.forEach((button) => {
     button.addEventListener("click", handleTabChange);
+  });
+  elements.previewTabButtons.forEach((button) => {
+    button.addEventListener("click", handlePreviewTabChange);
   });
   window.addEventListener("hashchange", handleTabHashChange);
 
@@ -318,6 +327,7 @@ function hydrateScopedAccountState() {
 function render() {
   elements.selectedDate.value = state.selectedDate;
 
+  renderPreviewTabs();
   renderTabs();
   renderProfilePanel();
   renderHeroPlan();
@@ -335,8 +345,31 @@ function hasConnectedAccount() {
 
 function renderAccessState() {
   const connected = hasConnectedAccount();
+  elements.previewShell.hidden = connected;
   elements.dashboardShell.hidden = !connected;
   document.body.classList.toggle("account-gated", !connected);
+}
+
+function renderPreviewTabs() {
+  if (!elements.previewShell) {
+    return;
+  }
+
+  elements.previewTabButtons.forEach((button) => {
+    const isActive = button.dataset.previewTabButton === ui.previewTab;
+    button.classList.toggle("active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  if (elements.previewDailyTab) {
+    elements.previewDailyTab.hidden = ui.previewTab !== "daily";
+  }
+  if (elements.previewProfileTab) {
+    elements.previewProfileTab.hidden = ui.previewTab !== "profile";
+  }
+  if (elements.previewProgressTab) {
+    elements.previewProgressTab.hidden = ui.previewTab !== "progress";
+  }
 }
 
 function renderTabs() {
@@ -374,6 +407,16 @@ function handleOpenDatePicker() {
 
   elements.selectedDate.focus();
   elements.selectedDate.click();
+}
+
+function handlePreviewTabChange(event) {
+  const button = event.target.closest("[data-preview-tab-button]");
+  if (!button) {
+    return;
+  }
+
+  ui.previewTab = button.dataset.previewTabButton || "daily";
+  renderPreviewTabs();
 }
 
 function renderProfilePanel() {
@@ -1160,7 +1203,7 @@ function renderDriveStatus() {
 
   let pill = "Локально";
   let status =
-    "Подключите Google Drive, чтобы история не терялась при очистке браузера.";
+    "Подключите Google Drive, чтобы история не терялась при очистке браузера. Ниже показан демо-режим сайта.";
   let hint =
     "Данные будут храниться в скрытой папке приложения на вашем Google Drive.";
   let accountNote = "Google Drive подключен для этого аккаунта.";
@@ -1203,7 +1246,8 @@ function renderDriveStatus() {
       "Google Drive подключен. Можно загрузить историю из облака или создать первую резервную копию.";
   } else if (state.cloudLastSyncedAt) {
     pill = "Отключено";
-    status = "Подключите Google Drive снова, чтобы продолжить облачную синхронизацию.";
+    status =
+      "Подключите Google Drive снова, чтобы продолжить облачную синхронизацию. До входа ниже показан демо-режим.";
   }
 
   if (connected && drive.accountEmail) {
