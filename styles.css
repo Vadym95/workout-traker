@@ -1047,6 +1047,222 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.detail-plan-shell {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.detail-plan-shell-empty {
+  margin-top: -0.2rem;
+}
+
+.detail-plan-toggle {
+  appearance: none;
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  padding: 0.9rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
+.detail-plan-toggle:hover {
+  transform: translateY(-1px);
+  border-color: rgba(242, 197, 122, 0.24);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.detail-plan-toggle span,
+.detail-plan-toggle strong {
+  font-weight: 800;
+}
+
+.detail-plan-toggle strong {
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 0.82rem;
+}
+
+.detail-plan-panel {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0.95rem;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, rgba(14, 16, 19, 0.92), rgba(9, 11, 14, 0.94));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.detail-plan-note,
+.detail-plan-empty-text,
+.detail-exercise-plan,
+.program-exercise-meta {
+  margin: 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
+.detail-plan-empty {
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.detail-plan-empty-title {
+  margin: 0 0 0.3rem;
+  font-weight: 800;
+}
+
+.detail-plan-list,
+.training-program-list {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detail-exercise-card,
+.program-exercise-card,
+.training-program {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.detail-exercise-card,
+.program-exercise-card {
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.detail-exercise-head,
+.training-program-head,
+.program-exercise-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.9rem;
+  align-items: flex-start;
+}
+
+.detail-exercise-name,
+.training-program-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  line-height: 0.96;
+  text-transform: uppercase;
+}
+
+.detail-exercise-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.detail-exercise-done input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--accent);
+}
+
+.detail-exercise-grid,
+.program-exercise-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.program-exercise-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.detail-metric-field,
+.detail-exercise-note {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.detail-metric-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+  padding: 0.2rem 0.8rem;
+}
+
+.detail-metric-input,
+.program-note-input,
+.detail-note-input,
+.program-exercise-title {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+}
+
+.detail-metric-input,
+.program-exercise-title {
+  padding: 0.7rem 0;
+}
+
+.detail-metric-input:focus,
+.program-note-input:focus,
+.detail-note-input:focus,
+.program-exercise-title:focus {
+  outline: none;
+}
+
+.detail-metric-wrap:focus-within,
+.program-note-wrap:focus-within,
+.detail-note-input:focus {
+  border-color: rgba(242, 197, 122, 0.3);
+  outline: 2px solid rgba(242, 197, 122, 0.22);
+  outline-offset: 0;
+}
+
+.detail-metric-unit {
+  color: var(--text-soft);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.program-exercise-title {
+  border-bottom: 1px dashed rgba(242, 197, 122, 0.28);
+}
+
+.program-exercise-title-wrap {
+  min-width: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.program-note-wrap {
+  padding: 0.25rem 0.9rem;
+  align-items: stretch;
+}
+
+.program-note-input,
+.detail-note-input {
+  min-height: 78px;
+  resize: vertical;
+  padding: 0.75rem 0;
+  line-height: 1.55;
+}
+
 .card-stamp {
   display: inline-flex;
   align-items: center;
@@ -2828,6 +3044,12 @@ h2 {
   gap: 0.5rem;
 }
 
+.training-program {
+  margin-top: 0.15rem;
+  padding-top: 0.95rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .schedule-preview-list {
   display: grid;
   gap: 0.7rem;
@@ -2901,7 +3123,9 @@ h2 {
   }
 
   .training-columns,
-  .track-form-grid {
+  .track-form-grid,
+  .program-exercise-grid,
+  .detail-exercise-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2991,7 +3215,15 @@ h2 {
   }
 
   .training-card-head,
-  .schedule-preview-item {
+  .schedule-preview-item,
+  .training-program-head,
+  .program-exercise-head,
+  .detail-exercise-head {
+    grid-template-columns: 1fr;
+    display: grid;
+  }
+
+  .detail-plan-toggle {
     grid-template-columns: 1fr;
     display: grid;
   }

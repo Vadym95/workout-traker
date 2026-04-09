@@ -151,6 +151,7 @@ const state = loadState();
 const ui = {
   newTrack: createNewTrackDraft(),
   previewTab: "daily",
+  expandedTrackPrograms: {},
 };
 
 const drive = {
@@ -193,6 +194,7 @@ function init() {
   elements.profilePanel.addEventListener("change", handleProfilePanelInput);
   elements.profilePanel.addEventListener("click", handleProfilePanelClick);
   elements.trackerGrid.addEventListener("input", handleTrackerInput);
+  elements.trackerGrid.addEventListener("change", handleTrackerInput);
   elements.trackerGrid.addEventListener("click", handleChipClick);
   elements.dayNotes.addEventListener("input", handleDayNotesInput);
   elements.saveDay.addEventListener("click", handleSaveClick);
@@ -425,8 +427,8 @@ function renderProfilePanel() {
   const numericTracks = tracks.filter((track) => track.type === "number");
   const checkboxTracks = tracks.filter((track) => track.type === "checkbox");
   const accountScopeNote = drive.accountEmail
-    ? `Сейчас список тренировок сохраняется для аккаунта ${drive.accountEmail}. Числовые активности попадают в дневной план с целью, а активности по дням работают как чек-лист с выбором недели.`
-    : "Добавляйте свои активности для этого Google-аккаунта. Числовые тренировки попадают в дневной план с целью, а тренировки по дням работают как чек-лист с выбором недели.";
+    ? `Сейчас список тренировок сохраняется для аккаунта ${drive.accountEmail}. Простой режим с числами и галочками остаётся как есть, а ниже у каждой тренировки можно собрать подробный план из упражнений, весов и отдыха.`
+    : "Добавляйте свои активности для этого Google-аккаунта. Простой режим с числами и галочками остаётся как есть, а у каждой тренировки можно дополнительно собрать подробный план из упражнений, весов и отдыха.";
 
   elements.profilePanel.innerHTML = `
     <div class="profile-stack">
@@ -622,6 +624,37 @@ function renderProfileField({ id, label, unit, value, step }) {
 
 function renderTrackEditor(track) {
   const trackTitle = escapeHtml(getTrackTitle(track));
+  const program = getTrackProgram(track);
+  const programEditor = `
+    <section class="training-program">
+      <div class="training-program-head">
+        <div>
+          <p class="summary-label">Подробный план</p>
+          <h4 class="training-program-title">Упражнения, веса и отдых</h4>
+        </div>
+        <button class="chip-button" type="button" data-add-track-exercise="${track.id}">
+          Добавить упражнение
+        </button>
+      </div>
+
+      ${
+        program.length
+          ? `
+              <div class="training-program-list">
+                ${program
+                  .map((exercise) => renderTrackExerciseEditor(track.id, exercise))
+                  .join("")}
+              </div>
+            `
+          : `
+              <p class="empty-note">
+                Подробный план пока пуст. Можно оставить текущую простую версию как есть или добавить упражнения,
+                подходы, повторы, вес и отдых.
+              </p>
+            `
+      }
+    </section>
+  `;
 
   if (track.type === "number") {
     return `
@@ -659,6 +692,8 @@ function renderTrackEditor(track) {
             </div>
           </label>
         </div>
+
+        ${programEditor}
       </article>
     `;
   }
@@ -690,7 +725,117 @@ function renderTrackEditor(track) {
         })}
       </div>
       <p class="hero-schedule-hint">Выбранные дни определяют, когда эта активность появится в ежедневном плане.</p>
+
+      ${programEditor}
     </article>
+  `;
+}
+
+function renderTrackExerciseEditor(trackId, exercise) {
+  return `
+    <article class="program-exercise-card">
+      <div class="program-exercise-head">
+        <div class="program-exercise-title-wrap">
+          <input
+            class="program-exercise-title"
+            type="text"
+            maxlength="48"
+            value="${escapeHtml(exercise.name)}"
+            placeholder="Название упражнения"
+            data-track-exercise-field="name"
+            data-track-id="${trackId}"
+            data-exercise-id="${exercise.id}"
+          />
+          <p class="program-exercise-meta">Этот шаблон появится в дневной карточке тренировки.</p>
+        </div>
+        <button
+          class="delete-track-button"
+          type="button"
+          data-remove-track-exercise="${trackId}"
+          data-exercise-id="${exercise.id}"
+        >
+          Удалить
+        </button>
+      </div>
+
+      <div class="program-exercise-grid">
+        ${renderExerciseMetricField({
+          label: "Подходы",
+          value: exercise.sets,
+          trackId,
+          exerciseId: exercise.id,
+          field: "sets",
+        })}
+        ${renderExerciseMetricField({
+          label: "Повторы",
+          value: exercise.reps,
+          trackId,
+          exerciseId: exercise.id,
+          field: "reps",
+        })}
+        ${renderExerciseMetricField({
+          label: "Вес",
+          value: exercise.weight,
+          trackId,
+          exerciseId: exercise.id,
+          field: "weight",
+          step: "0.5",
+          unit: "кг",
+        })}
+        ${renderExerciseMetricField({
+          label: "Отдых",
+          value: exercise.restSeconds,
+          trackId,
+          exerciseId: exercise.id,
+          field: "restSeconds",
+          unit: "сек",
+        })}
+      </div>
+
+      <label class="profile-field">
+        <span class="field-label">Заметка к упражнению</span>
+        <div class="profile-input-wrap program-note-wrap">
+          <textarea
+            class="program-note-input"
+            rows="2"
+            placeholder="Например: пауза в пиковой точке, медленный негатив, без рывка..."
+            data-track-exercise-field="note"
+            data-track-id="${trackId}"
+            data-exercise-id="${exercise.id}"
+          >${escapeHtml(exercise.note)}</textarea>
+        </div>
+      </label>
+    </article>
+  `;
+}
+
+function renderExerciseMetricField({
+  label,
+  value,
+  trackId,
+  exerciseId,
+  field,
+  step = "1",
+  unit = "ед.",
+}) {
+  return `
+    <label class="profile-field">
+      <span class="field-label">${label}</span>
+      <div class="profile-input-wrap">
+        <input
+          class="profile-input"
+          type="number"
+          inputmode="decimal"
+          min="0"
+          step="${step}"
+          value="${formatExerciseInput(value)}"
+          data-track-exercise-field="${field}"
+          data-track-id="${trackId}"
+          data-exercise-id="${exerciseId}"
+        />
+        <span class="profile-unit">${unit}</span>
+      </div>
+    </label>
   `;
 }
 
@@ -817,6 +962,7 @@ function renderTrackerGrid() {
     const numericValue =
       track.type === "number" ? formatNumberInput(entry[track.id] ?? 0) : null;
     const checked = Boolean(entry[track.id]);
+    const detailPlan = renderTrackDetailPlan(track, state.selectedDate);
     const stamp =
       track.type === "number"
         ? "Ежедневная отметка"
@@ -907,6 +1053,7 @@ function renderTrackerGrid() {
         </div>
 
         ${body}
+        ${detailPlan}
 
         <div class="tracker-card-footer">
           <p class="history-meta">${
@@ -924,6 +1071,142 @@ function renderTrackerGrid() {
       </article>
     `;
   }).join("");
+}
+
+function renderTrackDetailPlan(track, date) {
+  const program = getTrackProgram(track);
+  const expanded = Boolean(ui.expandedTrackPrograms[track.id]);
+
+  if (!program.length) {
+    return `
+      <div class="detail-plan-shell detail-plan-shell-empty">
+        <div class="detail-plan-empty">
+          <p class="detail-plan-empty-title">Подробный план пока не заполнен</p>
+          <p class="detail-plan-empty-text">
+            Если захотите, во вкладке «Профиль» можно добавить упражнения, подходы, повторы, вес и отдых именно для этой тренировки.
+          </p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="detail-plan-shell">
+      <button
+        class="detail-plan-toggle"
+        type="button"
+        data-toggle-track-program="${track.id}"
+        aria-expanded="${expanded ? "true" : "false"}"
+      >
+        <span>Подробный план</span>
+        <strong>${expanded ? "Скрыть" : `Показать · ${program.length}`}</strong>
+      </button>
+
+      <div class="detail-plan-panel" ${expanded ? "" : "hidden"}>
+        <p class="detail-plan-note">
+          Это расширение поверх текущей версии. Основное число или галочка остаются главным итогом дня, а ниже можно отметить конкретные упражнения и факт выполнения.
+        </p>
+
+        <div class="detail-plan-list">
+          ${program.map((exercise) => renderTrackDetailExercise(track, exercise, date)).join("")}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderTrackDetailExercise(track, exercise, date) {
+  const log = getExerciseLog(date, track.id, exercise.id);
+
+  return `
+    <article class="detail-exercise-card">
+      <div class="detail-exercise-head">
+        <div>
+          <p class="detail-exercise-name">${escapeHtml(exercise.name)}</p>
+          <p class="detail-exercise-plan">${formatExercisePlan(exercise)}</p>
+        </div>
+
+        <label class="detail-exercise-done">
+          <input
+            type="checkbox"
+            data-detail-track="${track.id}"
+            data-detail-exercise="${exercise.id}"
+            data-detail-field="done"
+            ${log.done ? "checked" : ""}
+          />
+          <span>Сделано</span>
+        </label>
+      </div>
+
+      <div class="detail-exercise-grid">
+        ${renderDetailMetricField({
+          label: "Факт. подходы",
+          field: "actualSets",
+          value: log.actualSets,
+          trackId: track.id,
+          exerciseId: exercise.id,
+        })}
+        ${renderDetailMetricField({
+          label: "Факт. повторы",
+          field: "actualReps",
+          value: log.actualReps,
+          trackId: track.id,
+          exerciseId: exercise.id,
+        })}
+        ${renderDetailMetricField({
+          label: "Факт. вес",
+          field: "actualWeight",
+          value: log.actualWeight,
+          trackId: track.id,
+          exerciseId: exercise.id,
+          step: "0.5",
+          unit: "кг",
+        })}
+      </div>
+
+      <label class="detail-exercise-note">
+        <span class="field-label">Заметка по выполнению</span>
+        <textarea
+          class="detail-note-input"
+          rows="2"
+          placeholder="Например: последний подход тяжелее, сократил вес, сделал длиннее отдых..."
+          data-detail-track="${track.id}"
+          data-detail-exercise="${exercise.id}"
+          data-detail-field="note"
+        >${escapeHtml(log.note)}</textarea>
+      </label>
+    </article>
+  `;
+}
+
+function renderDetailMetricField({
+  label,
+  field,
+  value,
+  trackId,
+  exerciseId,
+  step = "1",
+  unit = "ед.",
+}) {
+  return `
+    <label class="detail-metric-field">
+      <span class="field-label">${label}</span>
+      <div class="detail-metric-wrap">
+        <input
+          class="detail-metric-input"
+          type="number"
+          inputmode="decimal"
+          min="0"
+          step="${step}"
+          value="${formatExerciseInput(value)}"
+          data-detail-track="${trackId}"
+          data-detail-exercise="${exerciseId}"
+          data-detail-field="${field}"
+        />
+        <span class="detail-metric-unit">${unit}</span>
+      </div>
+    </label>
+  `;
 }
 
 function renderDayNotes() {
@@ -1273,6 +1556,15 @@ function renderDriveStatus() {
 }
 
 function handleTrackerInput(event) {
+  const detailTrackId = event.target.dataset.detailTrack;
+  if (detailTrackId) {
+    if (event.type !== "change") {
+      return;
+    }
+    handleDetailLogInput(event);
+    return;
+  }
+
   const trackId = event.target.dataset.track;
   if (!trackId) {
     return;
@@ -1310,6 +1602,14 @@ function handleDayNotesInput(event) {
 }
 
 function handleChipClick(event) {
+  const detailToggleButton = event.target.closest("[data-toggle-track-program]");
+  if (detailToggleButton) {
+    const trackId = detailToggleButton.dataset.toggleTrackProgram;
+    ui.expandedTrackPrograms[trackId] = !ui.expandedTrackPrograms[trackId];
+    renderTrackerGrid();
+    return;
+  }
+
   const button = event.target.closest("[data-adjust-track]");
   if (!button) {
     return;
@@ -1326,6 +1626,38 @@ function handleChipClick(event) {
   persist();
   renderTrackerGrid();
   renderSummary();
+  renderHistory();
+  renderDriveStatus();
+}
+
+function handleDetailLogInput(event) {
+  const trackId = event.target.dataset.detailTrack;
+  const exerciseId = event.target.dataset.detailExercise;
+  const field = event.target.dataset.detailField;
+  if (!trackId || !exerciseId || !field) {
+    return;
+  }
+
+  const entry = getEntry(state.selectedDate);
+  const nextDetailLogs = {
+    ...(entry.detailLogs || {}),
+  };
+  const trackLogs = {
+    ...(nextDetailLogs[trackId] || {}),
+  };
+  const currentLog = sanitizeExerciseLog(trackLogs[exerciseId]);
+
+  trackLogs[exerciseId] = sanitizeExerciseLog({
+    ...currentLog,
+    [field]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
+  });
+
+  nextDetailLogs[trackId] = trackLogs;
+  entry.detailLogs = nextDetailLogs;
+  state.entries[state.selectedDate] = entry;
+  noteCloudChange();
+  persist();
+  renderTrackerGrid();
   renderHistory();
   renderDriveStatus();
 }
@@ -1448,6 +1780,17 @@ function handleProfilePanelInput(event) {
     updateTrack(trackTargetId, {
       target: sanitizeTrackTargetValue(event.target.value),
     });
+    return;
+  }
+
+  const exerciseField = event.target.dataset.trackExerciseField;
+  if (exerciseField && event.type === "change") {
+    updateTrackExercise(
+      event.target.dataset.trackId,
+      event.target.dataset.exerciseId,
+      exerciseField,
+      event.target.value,
+    );
   }
 }
 
@@ -1461,6 +1804,21 @@ function handleProfilePanelClick(event) {
   const removeButton = event.target.closest("[data-remove-track]");
   if (removeButton) {
     removeTrack(removeButton.dataset.removeTrack);
+    return;
+  }
+
+  const addExerciseButton = event.target.closest("[data-add-track-exercise]");
+  if (addExerciseButton) {
+    addTrackExercise(addExerciseButton.dataset.addTrackExercise);
+    return;
+  }
+
+  const removeExerciseButton = event.target.closest("[data-remove-track-exercise]");
+  if (removeExerciseButton) {
+    removeTrackExercise(
+      removeExerciseButton.dataset.removeTrackExercise,
+      removeExerciseButton.dataset.exerciseId,
+    );
     return;
   }
 
@@ -1532,6 +1890,55 @@ function updateTrack(trackId, updates) {
   render();
 }
 
+function updateTrackExercise(trackId, exerciseId, field, rawValue) {
+  const track = getTrack(trackId);
+  if (!track) {
+    return;
+  }
+
+  const nextProgram = getTrackProgram(track).map((exercise) => {
+    if (exercise.id !== exerciseId) {
+      return exercise;
+    }
+
+    return sanitizeProgramExercise(
+      {
+        ...exercise,
+        [field]: rawValue,
+      },
+      0,
+      exercise,
+    );
+  });
+
+  updateTrack(trackId, { program: nextProgram });
+}
+
+function addTrackExercise(trackId) {
+  const track = getTrack(trackId);
+  if (!track) {
+    return;
+  }
+
+  updateTrack(trackId, {
+    program: [...getTrackProgram(track), createEmptyProgramExercise(getTrackProgram(track).length)],
+  });
+  ui.expandedTrackPrograms[trackId] = true;
+  showToast("Упражнение добавлено в подробный план.");
+}
+
+function removeTrackExercise(trackId, exerciseId) {
+  const track = getTrack(trackId);
+  if (!track) {
+    return;
+  }
+
+  updateTrack(trackId, {
+    program: getTrackProgram(track).filter((exercise) => exercise.id !== exerciseId),
+  });
+  showToast("Упражнение удалено из подробного плана.");
+}
+
 function removeTrack(trackId) {
   const track = getTrack(trackId);
   if (!track) {
@@ -1548,6 +1955,10 @@ function removeTrack(trackId) {
     Object.entries(state.entries).map(([date, entry]) => {
       const nextEntry = { ...entry };
       delete nextEntry[trackId];
+      if (nextEntry.detailLogs && typeof nextEntry.detailLogs === "object") {
+        nextEntry.detailLogs = { ...nextEntry.detailLogs };
+        delete nextEntry.detailLogs[trackId];
+      }
       return [date, nextEntry];
     }),
   );
@@ -1958,7 +2369,7 @@ function buildCloudPayload({ touchUpdatedAt = true } = {}) {
   }
 
   return {
-    version: 2,
+    version: 3,
     updatedAt,
     lastSavedAt: state.lastSavedAt,
     cycleStartDate: state.cycleStartDate,
@@ -1985,6 +2396,18 @@ function hasMeaningfulCloudData(payload) {
     ),
   );
   const hasNotesData = Object.values(entries).some((entry) => sanitizeNotes(entry.notes).length > 0);
+  const hasDetailLogData = Object.values(entries).some((entry) =>
+    Object.values(entry.detailLogs || {}).some((trackLogs) =>
+      Object.values(trackLogs || {}).some(
+        (log) =>
+          Boolean(log.done) ||
+          sanitizeNumber(log.actualSets) > 0 ||
+          sanitizeNumber(log.actualReps) > 0 ||
+          sanitizeMetricValue(log.actualWeight, 1, 500) > 0 ||
+          sanitizeExerciseNote(log.note).length > 0,
+      ),
+    ),
+  );
 
   const hasProfileData = [profile.heightCm, profile.weightKg, profile.age, profile.bodyFat].some(
     (value) => sanitizeNumber(value) > 0,
@@ -1994,7 +2417,7 @@ function hasMeaningfulCloudData(payload) {
     JSON.stringify(buildTrackComparisonPayload(tracks)) !==
     JSON.stringify(buildTrackComparisonPayload(defaultTracks));
 
-  return hasEntryData || hasNotesData || hasProfileData || hasTrackChanges;
+  return hasEntryData || hasNotesData || hasDetailLogData || hasProfileData || hasTrackChanges;
 }
 
 function applyCloudPayload(payload, fileId) {
@@ -2104,11 +2527,12 @@ function sanitizeEntries(value, tracks = sanitizeTracks(null)) {
       return accumulator;
     }
 
+    const detailLogs = sanitizeDetailLogs(entry.detailLogs, tracks);
     accumulator[date] = tracks.reduce((cleanEntry, track) => {
       cleanEntry[track.id] =
         track.type === "number" ? sanitizeNumber(entry[track.id]) : Boolean(entry[track.id]);
       return cleanEntry;
-    }, { notes: sanitizeNotes(entry.notes) });
+    }, { notes: sanitizeNotes(entry.notes), detailLogs });
 
     return accumulator;
   }, {});
@@ -2289,6 +2713,15 @@ function getTracks() {
 
 function getTrack(trackId) {
   return getTracks().find((track) => track.id === trackId) || null;
+}
+
+function getTrackProgram(track) {
+  return Array.isArray(track?.program) ? track.program : [];
+}
+
+function getExerciseLog(date, trackId, exerciseId) {
+  const entry = getEntry(date);
+  return sanitizeExerciseLog(entry.detailLogs?.[trackId]?.[exerciseId]);
 }
 
 function getTrackTitle(track) {
@@ -2954,6 +3387,18 @@ function createNewTrackDraft() {
   };
 }
 
+function createEmptyProgramExercise(index = 0) {
+  return {
+    id: createExerciseId(`exercise-${index + 1}`),
+    name: `Упражнение ${index + 1}`,
+    sets: 3,
+    reps: 10,
+    weight: 0,
+    restSeconds: 60,
+    note: "",
+  };
+}
+
 function buildTrackFromDraft(draft, index) {
   const title = sanitizeTrackTitle(draft.title, "");
   if (!title) {
@@ -2968,6 +3413,7 @@ function buildTrackFromDraft(draft, index) {
       type,
       target: type === "number" ? draft.target : 0,
       scheduleDays: type === "checkbox" ? draft.scheduleDays : [],
+      program: [],
     },
     index,
   );
@@ -2977,7 +3423,7 @@ function buildEmptyEntry(tracks) {
   return tracks.reduce((accumulator, track) => {
     accumulator[track.id] = track.type === "number" ? 0 : false;
     return accumulator;
-  }, { notes: "" });
+  }, { notes: "", detailLogs: {} });
 }
 
 function sanitizeNotes(value) {
@@ -2986,6 +3432,88 @@ function sanitizeNotes(value) {
   }
 
   return value.replace(/\r\n/g, "\n").replace(/\u0000/g, "").slice(0, 2000);
+}
+
+function sanitizeExerciseNote(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.replace(/\r\n/g, "\n").replace(/\u0000/g, "").trim().slice(0, 400);
+}
+
+function sanitizeTrackProgram(value, fallback = []) {
+  if (!Array.isArray(value)) {
+    return Array.isArray(fallback) ? sanitizeTrackProgram(fallback, []) : [];
+  }
+
+  const seenIds = new Set();
+  return value.reduce((accumulator, exercise, index) => {
+    const cleanExercise = sanitizeProgramExercise(exercise, index, fallback[index] || {});
+    if (!cleanExercise || seenIds.has(cleanExercise.id)) {
+      return accumulator;
+    }
+
+    seenIds.add(cleanExercise.id);
+    accumulator.push(cleanExercise);
+    return accumulator;
+  }, []);
+}
+
+function sanitizeProgramExercise(value, index, fallback = {}) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  return {
+    id: sanitizeExerciseId(value.id, value.name || fallback.name || `exercise-${index + 1}`),
+    name: sanitizeExerciseName(value.name, fallback.name || `Упражнение ${index + 1}`),
+    sets: sanitizeTrackTargetValue(value.sets ?? fallback.sets ?? 3, 50),
+    reps: sanitizeTrackTargetValue(value.reps ?? fallback.reps ?? 10, 500),
+    weight: sanitizeMetricValue(value.weight ?? fallback.weight ?? 0, 1, 500),
+    restSeconds: sanitizeTrackTargetValue(value.restSeconds ?? fallback.restSeconds ?? 60, 3600),
+    note: sanitizeExerciseNote(value.note ?? fallback.note ?? ""),
+  };
+}
+
+function sanitizeExerciseLog(value) {
+  const log = value && typeof value === "object" ? value : {};
+  return {
+    done: Boolean(log.done),
+    actualSets: sanitizeTrackTargetValue(log.actualSets, 50),
+    actualReps: sanitizeTrackTargetValue(log.actualReps, 500),
+    actualWeight: sanitizeMetricValue(log.actualWeight, 1, 500),
+    note: sanitizeExerciseNote(log.note),
+  };
+}
+
+function sanitizeDetailLogs(value, tracks) {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  return tracks.reduce((accumulator, track) => {
+    const rawTrackLogs = value[track.id];
+    if (!rawTrackLogs || typeof rawTrackLogs !== "object") {
+      return accumulator;
+    }
+
+    const allowedIds = new Set(getTrackProgram(track).map((exercise) => exercise.id));
+    const nextTrackLogs = Object.entries(rawTrackLogs).reduce((trackAccumulator, [exerciseId, exerciseLog]) => {
+      if (!allowedIds.has(exerciseId)) {
+        return trackAccumulator;
+      }
+
+      trackAccumulator[exerciseId] = sanitizeExerciseLog(exerciseLog);
+      return trackAccumulator;
+    }, {});
+
+    if (Object.keys(nextTrackLogs).length) {
+      accumulator[track.id] = nextTrackLogs;
+    }
+
+    return accumulator;
+  }, {});
 }
 
 function sanitizeActiveTab(value) {
@@ -3079,6 +3607,7 @@ function sanitizeTrack(track, index, fallback = {}) {
       energyMet: sanitizeMetricValue(track.energyMet ?? fallback.energyMet ?? 6, 1, 20) || 6,
       secondsPerRep:
         sanitizeMetricValue(track.secondsPerRep ?? fallback.secondsPerRep ?? 3, 1, 30) || 3,
+      program: sanitizeTrackProgram(track.program ?? fallback.program ?? []),
     };
   }
 
@@ -3096,6 +3625,7 @@ function sanitizeTrack(track, index, fallback = {}) {
     energyMet: sanitizeMetricValue(track.energyMet ?? fallback.energyMet ?? 5.5, 1, 20) || 5.5,
     sessionMinutes:
       sanitizeMetricValue(track.sessionMinutes ?? fallback.sessionMinutes ?? 15, 0, 180) || 15,
+    program: sanitizeTrackProgram(track.program ?? fallback.program ?? []),
   };
 }
 
@@ -3212,6 +3742,23 @@ function sanitizeTrackDescription(value) {
   return value.trim().replace(/\s+/g, " ").slice(0, 140);
 }
 
+function sanitizeExerciseName(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ").slice(0, 48);
+  return normalized || fallback;
+}
+
+function sanitizeExerciseId(value, name) {
+  if (typeof value === "string" && /^[a-z0-9_-]{3,80}$/i.test(value)) {
+    return value;
+  }
+
+  return createExerciseId(name);
+}
+
 function sanitizeEnergyModel(value, fallback) {
   return ["reps", "steps", "session"].includes(value) ? value : fallback;
 }
@@ -3248,6 +3795,15 @@ function buildTrackComparisonPayload(tracks) {
     type: track.type,
     target: track.type === "number" ? track.target : 0,
     scheduleDays: track.type === "checkbox" ? track.scheduleDays : [],
+    program: getTrackProgram(track).map((exercise) => ({
+      id: exercise.id,
+      name: exercise.name,
+      sets: exercise.sets,
+      reps: exercise.reps,
+      weight: exercise.weight,
+      restSeconds: exercise.restSeconds,
+      note: exercise.note,
+    })),
   }));
 }
 
@@ -3257,6 +3813,15 @@ function createTrackId(title) {
       .toLowerCase()
       .replace(/[^a-zа-я0-9]+/gi, "-")
       .replace(/^-+|-+$/g, "") || "track";
+  return `${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function createExerciseId(name) {
+  const slug =
+    String(name || "exercise")
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "") || "exercise";
   return `${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
@@ -3356,6 +3921,34 @@ function formatNumber(value) {
 
 function formatNumberInput(value) {
   return sanitizeNumber(value) === 0 ? "" : sanitizeNumber(value);
+}
+
+function formatExerciseInput(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) {
+    return "";
+  }
+
+  return Number.isInteger(number) ? String(number) : String(number).replace(/\.0$/, "");
+}
+
+function formatExercisePlan(exercise) {
+  const parts = [];
+
+  if (exercise.sets > 0 || exercise.reps > 0) {
+    parts.push(`${exercise.sets || "—"} x ${exercise.reps || "—"}`);
+  }
+  if (exercise.weight > 0) {
+    parts.push(`${formatExerciseInput(exercise.weight)} кг`);
+  }
+  if (exercise.restSeconds > 0) {
+    parts.push(`отдых ${formatNumber(exercise.restSeconds)} сек`);
+  }
+  if (exercise.note) {
+    parts.push(exercise.note);
+  }
+
+  return parts.length ? `План: ${parts.join(" · ")}` : "План пока не заполнен.";
 }
 
 function formatDate(dateString, options = {}) {
