@@ -1,4 +1,5 @@
-const STORAGE_KEY = "training-rhythm-tracker-v2";
+const LEGACY_STORAGE_KEY = "training-rhythm-tracker-v2";
+const ACCOUNT_STORAGE_PREFIX = "training-rhythm-tracker-account-v3";
 const DRIVE_DATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 const DRIVE_SCOPE = [DRIVE_DATA_SCOPE, "openid", "email", "profile"].join(" ");
 const DEFAULT_DRIVE_FILE_NAME = "training-rhythm-data.json";
@@ -7,6 +8,8 @@ const FALLBACK_USERINFO_ENDPOINT = "https://openidconnect.googleapis.com/v1/user
 const DRIVE_CONFIG = window.GOOGLE_DRIVE_CONFIG || {};
 const HISTORY_RANGES = ["7d", "30d", "year"];
 const WEEKDAY_LABELS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
+const TAB_IDS = ["daily", "profile", "progress"];
+const TRACK_ACCENTS = ["#d4a95f", "#8d98a5", "#9f4b21", "#348d83", "#bf6c44", "#7f8b95"];
 
 const TRACKS = [
   {
@@ -15,9 +18,13 @@ const TRACKS = [
     type: "number",
     target: 30,
     unit: "повторений",
+    shortUnit: "повт.",
     accent: "#d56b35",
     description: "Запиши итог за день, чтобы видеть силу в динамике.",
     increments: [5, 10, 20],
+    energyModel: "reps",
+    energyMet: 8.5,
+    secondsPerRep: 4,
   },
   {
     id: "pushups",
@@ -25,9 +32,13 @@ const TRACKS = [
     type: "number",
     target: 50,
     unit: "повторений",
+    shortUnit: "повт.",
     accent: "#f0b14d",
     description: "Даже короткий подход поддерживает ритм и серию.",
     increments: [10, 20, 30],
+    energyModel: "reps",
+    energyMet: 8,
+    secondsPerRep: 2.5,
   },
   {
     id: "squats",
@@ -35,9 +46,13 @@ const TRACKS = [
     type: "number",
     target: 100,
     unit: "повторений",
+    shortUnit: "повт.",
     accent: "#bf6c44",
     description: "Фиксируй объем ног так же честно, как верх тела.",
     increments: [10, 20, 40],
+    energyModel: "reps",
+    energyMet: 5.5,
+    secondsPerRep: 2.8,
   },
   {
     id: "steps",
@@ -45,9 +60,11 @@ const TRACKS = [
     type: "number",
     target: 15000,
     unit: "шагов",
+    shortUnit: "шагов",
     accent: "#18756d",
     description: "Ходьба держит общий тонус и помогает не выпадать из режима.",
     increments: [1000, 2000, 5000],
+    energyModel: "steps",
   },
   {
     id: "abs",
@@ -57,6 +74,9 @@ const TRACKS = [
     scheduleDays: [0, 2, 4],
     scheduleLabel: "Вс / Вт / Чт",
     description: "Фиксированный блок по Вс / Вт / Чт. Нужна только отметка о выполнении.",
+    energyModel: "session",
+    sessionMinutes: 12,
+    energyMet: 5.5,
   },
   {
     id: "shoulders",
@@ -66,6 +86,9 @@ const TRACKS = [
     scheduleDays: [1, 3, 5],
     scheduleLabel: "Пн / Ср / Пт",
     description: "Фиксированный блок по Пн / Ср / Пт. Отметь галочкой, когда сессия закрыта.",
+    energyModel: "session",
+    sessionMinutes: 20,
+    energyMet: 6.2,
   },
 ];
 
@@ -110,13 +133,19 @@ const elements = {
   driveAccountWrap: document.querySelector("#drive-account-wrap"),
   driveAccountEmail: document.querySelector("#drive-account-email"),
   driveAccountNote: document.querySelector("#drive-account-note"),
+  tabButtons: Array.from(document.querySelectorAll("[data-tab-button]")),
+  dailyTab: document.querySelector("#tab-daily"),
+  profileTab: document.querySelector("#tab-profile"),
+  progressTab: document.querySelector("#tab-progress"),
   historyRangeSwitch: document.querySelector("#history-range-switch"),
   historyRangeCaption: document.querySelector("#history-range-caption"),
-  absSchedulePreview: document.querySelector("#abs-schedule-preview"),
-  shouldersSchedulePreview: document.querySelector("#shoulders-schedule-preview"),
+  schedulePreviewList: document.querySelector("#schedule-preview-list"),
 };
 
 const state = loadState();
+const ui = {
+  newTrack: createNewTrackDraft(),
+};
 
 const drive = {
   clientId: normalizeClientId(DRIVE_CONFIG.clientId),
@@ -149,9 +178,9 @@ function init() {
   elements.selectedDate.addEventListener("change", handleSelectedDateChange);
   elements.openDatePicker.addEventListener("click", handleOpenDatePicker);
 
-  elements.profilePanel.addEventListener("change", handleProfileInput);
-  elements.heroPlan.addEventListener("change", handlePlanInput);
-  elements.heroPlan.addEventListener("click", handlePlanScheduleClick);
+  elements.profilePanel.addEventListener("input", handleProfilePanelInput);
+  elements.profilePanel.addEventListener("change", handleProfilePanelInput);
+  elements.profilePanel.addEventListener("click", handleProfilePanelClick);
   elements.trackerGrid.addEventListener("input", handleTrackerInput);
   elements.trackerGrid.addEventListener("click", handleChipClick);
   elements.saveDay.addEventListener("click", handleSaveClick);
@@ -160,66 +189,129 @@ function init() {
   elements.driveSync.addEventListener("click", handleDriveSync);
   elements.driveDisconnect.addEventListener("click", handleDriveDisconnect);
   elements.historyRangeSwitch.addEventListener("click", handleHistoryRangeClick);
+  elements.tabButtons.forEach((button) => {
+    button.addEventListener("click", handleTabChange);
+  });
 
   render();
   bootstrapDrive();
 }
 
 function loadState() {
-  const today = getTodayString();
-
-  try {
-    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-
-    return {
-      selectedDate: sanitizeDateInput(parsed.selectedDate, today),
-      cycleStartDate: sanitizeDateInput(parsed.cycleStartDate, today),
-      historyRange: sanitizeHistoryRange(parsed.historyRange),
-      profile: sanitizeProfile(parsed.profile),
-      plan: sanitizePlan(parsed.plan),
-      entries: sanitizeEntries(parsed.entries),
-      lastSavedAt: normalizeIso(parsed.lastSavedAt),
-      updatedAt: normalizeIso(parsed.updatedAt) || normalizeIso(parsed.lastSavedAt),
-      cloudLastSyncedAt: normalizeIso(parsed.cloudLastSyncedAt),
-      driveFileId: typeof parsed.driveFileId === "string" ? parsed.driveFileId : "",
-    };
-  } catch {
-    return {
-      selectedDate: today,
-      cycleStartDate: today,
-      historyRange: "7d",
-      profile: sanitizeProfile(null),
-      plan: sanitizePlan(null),
-      entries: {},
-      lastSavedAt: null,
-      updatedAt: null,
-      cloudLastSyncedAt: null,
-      driveFileId: "",
-    };
-  }
+  return loadStoredState(LEGACY_STORAGE_KEY) || createDefaultState();
 }
 
 function persist() {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify({
-      selectedDate: state.selectedDate,
-      cycleStartDate: state.cycleStartDate,
-      historyRange: state.historyRange,
-      profile: state.profile,
-      plan: state.plan,
-      entries: state.entries,
-      lastSavedAt: state.lastSavedAt,
-      updatedAt: state.updatedAt,
-      cloudLastSyncedAt: state.cloudLastSyncedAt,
-      driveFileId: state.driveFileId,
-    }),
-  );
+  localStorage.setItem(getPersistStorageKey(), JSON.stringify(serializeState()));
+}
+
+function loadStoredState(storageKey) {
+  const raw = localStorage.getItem(storageKey);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    return normalizeStoredState(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeStoredState(parsed) {
+  const today = getTodayString();
+  const data = parsed && typeof parsed === "object" ? parsed : {};
+  const tracks = sanitizeTracks(data.tracks, data.plan);
+
+  return {
+    activeTab: sanitizeActiveTab(data.activeTab),
+    selectedDate: sanitizeDateInput(data.selectedDate, today),
+    cycleStartDate: sanitizeDateInput(data.cycleStartDate, today),
+    historyRange: sanitizeHistoryRange(data.historyRange),
+    profile: sanitizeProfile(data.profile),
+    tracks,
+    entries: sanitizeEntries(data.entries, tracks),
+    lastSavedAt: normalizeIso(data.lastSavedAt),
+    updatedAt: normalizeIso(data.updatedAt) || normalizeIso(data.lastSavedAt),
+    cloudLastSyncedAt: normalizeIso(data.cloudLastSyncedAt),
+    driveFileId: typeof data.driveFileId === "string" ? data.driveFileId : "",
+  };
+}
+
+function createDefaultState() {
+  const today = getTodayString();
+  return {
+    activeTab: "daily",
+    selectedDate: today,
+    cycleStartDate: today,
+    historyRange: "7d",
+    profile: sanitizeProfile(null),
+    tracks: sanitizeTracks(null),
+    entries: {},
+    lastSavedAt: null,
+    updatedAt: null,
+    cloudLastSyncedAt: null,
+    driveFileId: "",
+  };
+}
+
+function serializeState() {
+  return {
+    activeTab: state.activeTab,
+    selectedDate: state.selectedDate,
+    cycleStartDate: state.cycleStartDate,
+    historyRange: state.historyRange,
+    profile: state.profile,
+    tracks: state.tracks,
+    entries: state.entries,
+    lastSavedAt: state.lastSavedAt,
+    updatedAt: state.updatedAt,
+    cloudLastSyncedAt: state.cloudLastSyncedAt,
+    driveFileId: state.driveFileId,
+  };
+}
+
+function applyStoredState(nextState) {
+  Object.assign(state, normalizeStoredState(nextState));
+}
+
+function getPersistStorageKey() {
+  if (typeof drive !== "undefined" && drive.accountEmail) {
+    return getAccountStorageKey(drive.accountEmail);
+  }
+
+  return LEGACY_STORAGE_KEY;
+}
+
+function getAccountStorageKey(email) {
+  return `${ACCOUNT_STORAGE_PREFIX}:${normalizeAccountEmail(email)}`;
+}
+
+function normalizeAccountEmail(email) {
+  return typeof email === "string" ? email.trim().toLowerCase() : "";
+}
+
+function hydrateScopedAccountState() {
+  const accountEmail = normalizeAccountEmail(drive.accountEmail);
+  if (!accountEmail) {
+    return false;
+  }
+
+  const scopedState = loadStoredState(getAccountStorageKey(accountEmail));
+  if (scopedState) {
+    applyStoredState(scopedState);
+    return true;
+  }
+
+  applyStoredState(createDefaultState());
+  persist();
+  return false;
 }
 
 function render() {
   elements.selectedDate.value = state.selectedDate;
 
+  renderTabs();
   renderProfilePanel();
   renderHeroPlan();
   renderTrackerGrid();
@@ -240,6 +332,22 @@ function renderAccessState() {
   document.body.classList.toggle("account-gated", !connected);
 }
 
+function renderTabs() {
+  elements.tabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.tabButton === state.activeTab);
+  });
+
+  if (elements.dailyTab) {
+    elements.dailyTab.hidden = state.activeTab !== "daily";
+  }
+  if (elements.profileTab) {
+    elements.profileTab.hidden = state.activeTab !== "profile";
+  }
+  if (elements.progressTab) {
+    elements.progressTab.hidden = state.activeTab !== "progress";
+  }
+}
+
 function handleSelectedDateChange(event) {
   state.selectedDate = event.target.value || getTodayString();
   persist();
@@ -258,63 +366,180 @@ function handleOpenDatePicker() {
 
 function renderProfilePanel() {
   const profileStats = getProfileStats();
+  const tracks = getTracks();
+  const numericTracks = tracks.filter((track) => track.type === "number");
+  const checkboxTracks = tracks.filter((track) => track.type === "checkbox");
+  const accountScopeNote = drive.accountEmail
+    ? `Сейчас список тренировок сохраняется для аккаунта ${drive.accountEmail}. Числовые активности попадают в дневной план с целью, а активности по дням работают как чек-лист с выбором недели.`
+    : "Добавляйте свои активности для этого Google-аккаунта. Числовые тренировки попадают в дневной план с целью, а тренировки по дням работают как чек-лист с выбором недели.";
 
   elements.profilePanel.innerHTML = `
-    <div class="profile-head">
-      <div>
-        <p class="summary-label">Личный профиль</p>
-        <h3 class="profile-title">Параметры тела и базовые ориентиры</h3>
-      </div>
-      <p class="profile-note">
-        Рост и вес помогают точнее считать шаги и активные калории, а % жира
-        добавляет ориентир по сухой массе.
-      </p>
-    </div>
+    <div class="profile-stack">
+      <section class="profile-card panel-soft">
+        <div class="profile-head">
+          <div>
+            <p class="summary-label">Личный профиль</p>
+            <h3 class="profile-title">Параметры тела и базовые ориентиры</h3>
+          </div>
+          <p class="profile-note">
+            Рост и вес помогают точнее считать шаги и активные калории, а % жира
+            добавляет ориентир по сухой массе.
+          </p>
+        </div>
 
-    <div class="profile-grid">
-      ${renderProfileField({
-        id: "heightCm",
-        label: "Рост",
-        unit: "см",
-        value: state.profile.heightCm,
-        step: "1",
-      })}
-      ${renderProfileField({
-        id: "weightKg",
-        label: "Вес",
-        unit: "кг",
-        value: state.profile.weightKg,
-        step: "0.1",
-      })}
-      ${renderProfileField({
-        id: "age",
-        label: "Возраст",
-        unit: "лет",
-        value: state.profile.age,
-        step: "1",
-      })}
-      ${renderProfileField({
-        id: "bodyFat",
-        label: "% жира",
-        unit: "%",
-        value: state.profile.bodyFat,
-        step: "0.1",
-      })}
-    </div>
+        <div class="profile-grid">
+          ${renderProfileField({
+            id: "heightCm",
+            label: "Рост",
+            unit: "см",
+            value: state.profile.heightCm,
+            step: "1",
+          })}
+          ${renderProfileField({
+            id: "weightKg",
+            label: "Вес",
+            unit: "кг",
+            value: state.profile.weightKg,
+            step: "0.1",
+          })}
+          ${renderProfileField({
+            id: "age",
+            label: "Возраст",
+            unit: "лет",
+            value: state.profile.age,
+            step: "1",
+          })}
+          ${renderProfileField({
+            id: "bodyFat",
+            label: "% жира",
+            unit: "%",
+            value: state.profile.bodyFat,
+            step: "0.1",
+          })}
+        </div>
 
-    <div class="profile-stats">
-      <div class="profile-pill">
-        <span>ИМТ</span>
-        <strong>${profileStats.bmiLabel}</strong>
-      </div>
-      <div class="profile-pill">
-        <span>Сухая масса</span>
-        <strong>${profileStats.leanMassLabel}</strong>
-      </div>
-      <div class="profile-pill">
-        <span>Профиль</span>
-        <strong>${profileStats.profileLabel}</strong>
-      </div>
+        <div class="profile-stats">
+          <div class="profile-pill">
+            <span>ИМТ</span>
+            <strong>${profileStats.bmiLabel}</strong>
+          </div>
+          <div class="profile-pill">
+            <span>Сухая масса</span>
+            <strong>${profileStats.leanMassLabel}</strong>
+          </div>
+          <div class="profile-pill">
+            <span>Профиль</span>
+            <strong>${profileStats.profileLabel}</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="profile-card panel-soft">
+        <div class="profile-head">
+          <div>
+            <p class="summary-label">Тренировки аккаунта</p>
+            <h3 class="profile-title">Состав ежедневного плана</h3>
+          </div>
+          <p class="profile-note">
+            ${accountScopeNote}
+          </p>
+        </div>
+
+        <div class="training-create">
+          <div class="track-form-grid">
+            <label class="profile-field profile-field-wide">
+              <span class="field-label">Название тренировки</span>
+              <div class="profile-input-wrap">
+                <input
+                  class="profile-input"
+                  type="text"
+                  maxlength="40"
+                  value="${escapeHtml(ui.newTrack.title)}"
+                  placeholder="Например, бег, планка или бурпи"
+                  data-new-track-field="title"
+                />
+              </div>
+            </label>
+
+            <label class="profile-field">
+              <span class="field-label">Тип активности</span>
+              <div class="profile-input-wrap select-wrap">
+                <select class="profile-select" data-new-track-field="type">
+                  <option value="number" ${
+                    ui.newTrack.type === "number" ? "selected" : ""
+                  }>С количеством</option>
+                  <option value="checkbox" ${
+                    ui.newTrack.type === "checkbox" ? "selected" : ""
+                  }>По дням недели</option>
+                </select>
+              </div>
+            </label>
+
+            ${
+              ui.newTrack.type === "number"
+                ? `
+                  <label class="profile-field">
+                    <span class="field-label">Цель на день</span>
+                    <div class="profile-input-wrap">
+                      <input
+                        class="profile-input"
+                        type="number"
+                        inputmode="numeric"
+                        min="0"
+                        step="1"
+                        value="${formatPlanInput(ui.newTrack.target)}"
+                        data-new-track-field="target"
+                      />
+                      <span class="profile-unit">ед.</span>
+                    </div>
+                  </label>
+                `
+                : `
+                  <div class="profile-field profile-field-wide">
+                    <span class="field-label">Дни недели</span>
+                    <div class="training-weekdays">
+                      ${renderWeekdayToggleRow({
+                        days: ui.newTrack.scheduleDays,
+                        selectedWeekday: getWeekdayIndex(state.selectedDate),
+                        datasetName: "data-new-track-day-toggle",
+                      })}
+                    </div>
+                  </div>
+                `
+            }
+          </div>
+
+          <div class="hero-actions training-actions">
+            <button class="button button-primary" type="button" data-add-track>
+              Добавить тренировку
+            </button>
+          </div>
+        </div>
+
+        <div class="training-columns">
+          <div class="training-column">
+            <p class="summary-label">С количеством</p>
+            <div class="training-list">
+              ${
+                numericTracks.length
+                  ? numericTracks.map((track) => renderTrackEditor(track)).join("")
+                  : '<p class="empty-note">Пока нет тренировок с количеством.</p>'
+              }
+            </div>
+          </div>
+
+          <div class="training-column">
+            <p class="summary-label">По дням недели</p>
+            <div class="training-list">
+              ${
+                checkboxTracks.length
+                  ? checkboxTracks.map((track) => renderTrackEditor(track)).join("")
+                  : '<p class="empty-note">Пока нет тренировок по дням.</p>'
+              }
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
   `;
 }
@@ -340,10 +565,106 @@ function renderProfileField({ id, label, unit, value, step }) {
   `;
 }
 
+function renderTrackEditor(track) {
+  const trackTitle = escapeHtml(getTrackTitle(track));
+
+  if (track.type === "number") {
+    return `
+      <article class="training-card" style="--card-accent: ${track.accent};">
+        <div class="training-card-head">
+          <div>
+            <p class="card-kicker">С количеством</p>
+            <input
+              class="training-title-input"
+              type="text"
+              maxlength="40"
+              value="${trackTitle}"
+              data-track-title="${track.id}"
+            />
+          </div>
+          <button class="delete-track-button" type="button" data-remove-track="${track.id}">
+            Удалить
+          </button>
+        </div>
+
+        <div class="track-form-grid">
+          <label class="profile-field">
+            <span class="field-label">Цель на день</span>
+            <div class="profile-input-wrap">
+              <input
+                class="profile-input"
+                type="number"
+                inputmode="numeric"
+                min="0"
+                step="1"
+                value="${formatPlanInput(getTrackTarget(track))}"
+                data-track-target="${track.id}"
+              />
+              <span class="profile-unit">${escapeHtml(getTrackShortUnit(track))}</span>
+            </div>
+          </label>
+        </div>
+      </article>
+    `;
+  }
+
+  return `
+    <article class="training-card" style="--card-accent: ${track.accent};">
+      <div class="training-card-head">
+        <div>
+          <p class="card-kicker">По дням недели</p>
+          <input
+            class="training-title-input"
+            type="text"
+            maxlength="40"
+            value="${trackTitle}"
+            data-track-title="${track.id}"
+          />
+        </div>
+        <button class="delete-track-button" type="button" data-remove-track="${track.id}">
+          Удалить
+        </button>
+      </div>
+
+      <div class="training-weekdays">
+        ${renderWeekdayToggleRow({
+          days: getTrackScheduleDays(track),
+          selectedWeekday: getWeekdayIndex(state.selectedDate),
+          datasetName: "data-track-day-toggle",
+          trackId: track.id,
+        })}
+      </div>
+      <p class="hero-schedule-hint">Выбранные дни определяют, когда эта активность появится в ежедневном плане.</p>
+    </article>
+  `;
+}
+
+function renderWeekdayToggleRow({ days, selectedWeekday, datasetName, trackId = "" }) {
+  return WEEKDAY_LABELS.map((label, index) => {
+    const attributes = [
+      `${datasetName}="${trackId || index}"`,
+      trackId ? `data-weekday="${index}"` : `data-weekday="${index}"`,
+    ].join(" ");
+
+    return `
+      <button
+        type="button"
+        class="weekday-chip ${days.includes(index) ? "planned" : ""} ${
+          selectedWeekday === index ? "selected" : ""
+        }"
+        ${attributes}
+      >
+        ${label}
+      </button>
+    `;
+  }).join("");
+}
+
 function renderHeroPlan() {
+  const tracks = getTracks();
   const selectedWeekday = getWeekdayIndex(state.selectedDate);
-  const numericTracks = TRACKS.filter((track) => track.type === "number");
-  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const numericTracks = tracks.filter((track) => track.type === "number");
+  const checkboxTracks = tracks.filter((track) => track.type === "checkbox");
 
   elements.heroPlan.innerHTML = `
     <div class="hero-plan-head">
@@ -352,91 +673,90 @@ function renderHeroPlan() {
     </div>
 
     <div class="hero-plan-list">
-      ${numericTracks
-        .map((track) => {
-          const trackTitle = escapeHtml(getTrackTitle(track));
-          return `
-            <label class="hero-plan-item editable">
-              <span class="hero-plan-name">${trackTitle}</span>
-              <div class="hero-plan-target-wrap">
-                <input
-                  class="hero-plan-target-input"
-                  type="number"
-                  inputmode="numeric"
-                  min="0"
-                  step="1"
-                  value="${formatPlanInput(getTrackTarget(track))}"
-                  data-plan-target="${track.id}"
-                  aria-label="${trackTitle} цель"
-                />
-                <span class="hero-plan-target-unit">${
-                  track.id === "steps" ? "шагов" : "повт."
-                }</span>
-              </div>
-            </label>
-          `;
-        })
-        .join("")}
+      ${
+        numericTracks.length
+          ? numericTracks
+              .map((track) => {
+                const trackTitle = escapeHtml(getTrackTitle(track));
+                const target = getTrackTarget(track);
+                return `
+                  <div class="hero-plan-item">
+                    <span class="hero-plan-name">${trackTitle}</span>
+                    <div class="hero-plan-target-readout">
+                      <strong>${target > 0 ? formatNumber(target) : "—"}</strong>
+                      <span class="hero-plan-target-unit">${escapeHtml(getTrackShortUnit(track))}</span>
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")
+          : '<p class="empty-note">Добавьте хотя бы одну числовую активность во вкладке «Профиль».</p>'
+      }
     </div>
 
-    <div class="hero-schedule-list">
-      ${checkboxTracks
-        .map((track) => {
-          const activeToday = isTrackPlannedForDate(track, state.selectedDate);
-          const scheduleDays = getTrackScheduleDays(track);
-          const trackTitle = escapeHtml(getTrackTitle(track));
-          return `
-            <div class="hero-schedule-card ${activeToday ? "active" : ""}">
-              <div class="hero-schedule-top">
-                <input
-                  class="hero-plan-label-input"
-                  type="text"
-                  maxlength="40"
-                  value="${trackTitle}"
-                  data-plan-label="${track.id}"
-                  aria-label="Название блока ${trackTitle}"
-                />
-                <strong>${formatWeekdayList(scheduleDays)}</strong>
-              </div>
-              <div class="weekday-row">
-                ${WEEKDAY_LABELS.map(
-                  (label, index) => `
-                    <button
-                      type="button"
-                      class="weekday-chip ${
-                        scheduleDays.includes(index) ? "planned" : ""
-                      } ${selectedWeekday === index ? "selected" : ""} ${
-                        activeToday && selectedWeekday === index ? "active" : ""
-                      }"
-                      data-plan-day-toggle="${track.id}"
-                      data-weekday="${index}"
-                      aria-pressed="${scheduleDays.includes(index) ? "true" : "false"}"
-                    >
-                      ${label}
-                    </button>
-                  `,
-                ).join("")}
-              </div>
-              <p class="hero-schedule-hint">Нажмите на дни, чтобы настроить свой ритм.</p>
-            </div>
-          `;
-        })
-        .join("")}
-    </div>
+    ${
+      checkboxTracks.length
+        ? `
+          <div class="hero-schedule-list">
+            ${checkboxTracks
+              .map((track) => {
+                const activeToday = isTrackPlannedForDate(track, state.selectedDate);
+                const scheduleDays = getTrackScheduleDays(track);
+                const trackTitle = escapeHtml(getTrackTitle(track));
+                return `
+                  <div class="hero-schedule-card ${activeToday ? "active" : ""}">
+                    <div class="hero-schedule-top">
+                      <span class="hero-plan-name">${trackTitle}</span>
+                      <strong>${formatWeekdayList(scheduleDays)}</strong>
+                    </div>
+                    <div class="weekday-row">
+                      ${WEEKDAY_LABELS.map(
+                        (label, index) => `
+                          <span class="weekday-chip ${
+                            scheduleDays.includes(index) ? "planned" : ""
+                          } ${selectedWeekday === index ? "selected" : ""} ${
+                            activeToday && selectedWeekday === index ? "active" : ""
+                          }">
+                            ${label}
+                          </span>
+                        `,
+                      ).join("")}
+                    </div>
+                  </div>
+                `;
+              })
+              .join("")}
+          </div>
+        `
+        : '<p class="hero-schedule-hint">Во вкладке «Профиль» можно добавить тренировки по дням недели.</p>'
+    }
   `;
 
-  elements.absSchedulePreview.textContent = `${getTrackTitle(getTrack("abs"))}: ${formatWeekdayList(
-    getTrackScheduleDays(getTrack("abs")),
-  )}`;
-  elements.shouldersSchedulePreview.textContent = `${getTrackTitle(getTrack("shoulders"))}: ${formatWeekdayList(
-    getTrackScheduleDays(getTrack("shoulders")),
-  )}`;
+  renderSchedulePreview();
 }
 
 function renderTrackerGrid() {
   const entry = getEntry(state.selectedDate);
+  const tracks = getTracks();
 
-  elements.trackerGrid.innerHTML = TRACKS.map((track) => {
+  if (!tracks.length) {
+    elements.trackerGrid.innerHTML = `
+      <article class="tracker-card inactive">
+        <div class="tracker-card-header">
+          <div>
+            <p class="card-kicker">Пустой план</p>
+            <h3 class="card-title">Добавьте первую активность во вкладке «Профиль»</h3>
+            <p class="card-description">
+              После этого она сразу появится здесь, а история начнет собираться именно для этого аккаунта.
+            </p>
+          </div>
+        </div>
+      </article>
+    `;
+    return;
+  }
+
+  elements.trackerGrid.innerHTML = tracks.map((track) => {
     const trackTitle = escapeHtml(getTrackTitle(track));
     const isAvailable = isTrackPlannedForDate(track, state.selectedDate);
     const numericValue =
@@ -519,9 +839,9 @@ function renderTrackerGrid() {
       >
         <div class="tracker-card-header">
           <div>
-            <p class="card-kicker">${track.type === "number" ? track.unit : "чек-лист"}</p>
+            <p class="card-kicker">${track.type === "number" ? getTrackUnit(track) : "чек-лист"}</p>
             <h3 class="card-title">${trackTitle}</h3>
-            <p class="card-description">${track.description}</p>
+            <p class="card-description">${getTrackDescription(track)}</p>
           </div>
           <span class="card-stamp">${stamp}</span>
         </div>
@@ -589,10 +909,15 @@ function renderSummary() {
 }
 
 function renderCadence() {
+  const checkboxTracks = getTracks().filter((track) => track.type === "checkbox");
   const plannedCheckboxTracks = getPlannedCheckboxTracks(state.selectedDate);
   const nextBlock = getNextScheduledBlock(state.selectedDate);
 
-  if (plannedCheckboxTracks.length) {
+  if (!checkboxTracks.length) {
+    elements.cadenceTitle.textContent = "Тренировки по дням пока не добавлены";
+    elements.cadenceText.textContent =
+      "Во вкладке «Профиль» можно добавить активности, которые отмечаются по дням недели.";
+  } else if (plannedCheckboxTracks.length) {
     const label = formatTrackList(plannedCheckboxTracks);
     elements.cadenceTitle.textContent = `Сегодня в плане ${label}`;
     elements.cadenceText.textContent =
@@ -601,7 +926,7 @@ function renderCadence() {
   } else {
     elements.cadenceTitle.textContent = "Сегодня день восстановления";
     elements.cadenceText.textContent =
-      "На выбранную дату для пресса и плеч нет отдельного блока. Можно спокойно держать базовый ежедневный объем.";
+      "На выбранную дату нет активностей по дням недели. Можно спокойно закрывать ежедневные числовые цели.";
   }
 
   elements.nextWorkout.textContent = nextBlock
@@ -609,9 +934,11 @@ function renderCadence() {
         nextBlock.tracks,
       )}`
     : "—";
-  elements.cycleStartLabel.textContent =
-    `${getTrackTitle(getTrack("abs"))}: ${formatWeekdayList(getTrackScheduleDays(getTrack("abs")))} · ` +
-    `${getTrackTitle(getTrack("shoulders"))}: ${formatWeekdayList(getTrackScheduleDays(getTrack("shoulders")))}`;
+  elements.cycleStartLabel.textContent = checkboxTracks.length
+    ? checkboxTracks
+        .map((track) => `${getTrackTitle(track)}: ${formatWeekdayList(getTrackScheduleDays(track))}`)
+        .join(" · ")
+    : "Добавьте активности по дням";
 }
 
 function renderHistory() {
@@ -647,7 +974,6 @@ function renderHistory() {
 }
 
 function renderDetailedHistoryCard(date) {
-  const entry = getEntry(date);
   const stats = getCompletionStats(date);
   const plannedCheckboxTracks = getPlannedCheckboxTracks(date);
 
@@ -668,20 +994,7 @@ function renderDetailedHistoryCard(date) {
 
       <p class="history-meta">${getDayPlanMeta(date, plannedCheckboxTracks)}</p>
 
-      <div class="history-details">
-        ${renderHistoryLine("Подтягивания", `${formatNumber(entry.pullups || 0)}`)}
-        ${renderHistoryLine("Отжимания", `${formatNumber(entry.pushups || 0)}`)}
-        ${renderHistoryLine("Приседания", `${formatNumber(entry.squats || 0)}`)}
-        ${renderHistoryLine("Шаги", `${formatNumber(entry.steps || 0)}`)}
-        ${renderHistoryLine(
-          escapeHtml(getTrackTitle(getTrack("abs"))),
-          isTrackPlannedForDate(getTrack("abs"), date) ? (entry.abs ? "Да" : "Нет") : "Отдых",
-        )}
-        ${renderHistoryLine(
-          escapeHtml(getTrackTitle(getTrack("shoulders"))),
-          isTrackPlannedForDate(getTrack("shoulders"), date) ? (entry.shoulders ? "Да" : "Нет") : "Отдых",
-        )}
-      </div>
+      <div class="history-details">${renderHistoryTrackLines(date)}</div>
     </article>
   `;
 }
@@ -745,20 +1058,7 @@ function renderYearHistoryCard(month) {
 
       <p class="history-meta">${month.activeDays} активных из ${month.dayCount} дней</p>
 
-      <div class="history-details">
-        ${renderHistoryLine("Подтягивания", formatNumber(month.numericTotals.pullups))}
-        ${renderHistoryLine("Отжимания", formatNumber(month.numericTotals.pushups))}
-        ${renderHistoryLine("Приседания", formatNumber(month.numericTotals.squats))}
-        ${renderHistoryLine("Шаги", formatNumber(month.numericTotals.steps))}
-        ${renderHistoryLine(
-          escapeHtml(getTrackTitle(getTrack("abs"))),
-          `${month.checkboxTotals.abs.completed}/${month.checkboxTotals.abs.planned}`,
-        )}
-        ${renderHistoryLine(
-          escapeHtml(getTrackTitle(getTrack("shoulders"))),
-          `${month.checkboxTotals.shoulders.completed}/${month.checkboxTotals.shoulders.planned}`,
-        )}
-      </div>
+      <div class="history-details">${renderMonthHistoryLines(month)}</div>
     </article>
   `;
 }
@@ -770,6 +1070,55 @@ function renderHistoryLine(label, value) {
       <strong>${value}</strong>
     </div>
   `;
+}
+
+function renderHistoryTrackLines(date) {
+  const entry = getEntry(date);
+  const tracks = getTracks();
+
+  if (!tracks.length) {
+    return '<p class="empty-note">Добавьте активности в профиле, чтобы история начала собираться.</p>';
+  }
+
+  return tracks
+    .map((track) => {
+      if (track.type === "number") {
+        return renderHistoryLine(escapeHtml(getTrackTitle(track)), formatNumber(entry[track.id] || 0));
+      }
+
+      const value = isTrackPlannedForDate(track, date)
+        ? entry[track.id]
+          ? "Да"
+          : "Нет"
+        : "Отдых";
+      return renderHistoryLine(escapeHtml(getTrackTitle(track)), value);
+    })
+    .join("");
+}
+
+function renderMonthHistoryLines(month) {
+  const tracks = getTracks();
+
+  if (!tracks.length) {
+    return '<p class="empty-note">В этом аккаунте еще нет активностей для помесячной сводки.</p>';
+  }
+
+  return tracks
+    .map((track) => {
+      if (track.type === "number") {
+        return renderHistoryLine(
+          escapeHtml(getTrackTitle(track)),
+          formatNumber(month.numericTotals[track.id] || 0),
+        );
+      }
+
+      const totals = month.checkboxTotals[track.id] || { completed: 0, planned: 0 };
+      return renderHistoryLine(
+        escapeHtml(getTrackTitle(track)),
+        `${totals.completed}/${totals.planned}`,
+      );
+    })
+    .join("");
 }
 
 function renderDriveStatus() {
@@ -852,7 +1201,7 @@ function handleTrackerInput(event) {
     return;
   }
 
-  const track = TRACKS.find((item) => item.id === trackId);
+  const track = getTrack(trackId);
   if (!track) {
     return;
   }
@@ -910,30 +1259,28 @@ function handleHistoryRangeClick(event) {
   renderHistory();
 }
 
-function handleProfileInput(event) {
-  const field = event.target.dataset.profileField;
-  if (!field) {
+function handleTabChange(event) {
+  const button = event.currentTarget;
+  const nextTab = sanitizeActiveTab(button.dataset.tabButton);
+  if (state.activeTab === nextTab) {
     return;
   }
 
-  state.profile = sanitizeProfile({
-    ...state.profile,
-    [field]: event.target.value,
-  });
-  noteCloudChange();
+  state.activeTab = nextTab;
   persist();
-  render();
+  renderTabs();
 }
 
-function handlePlanInput(event) {
-  const trackId = event.target.dataset.planTarget;
-  if (trackId) {
-    state.plan = sanitizePlan({
-      ...state.plan,
-      targets: {
-        ...state.plan.targets,
-        [trackId]: event.target.value,
-      },
+function handleProfilePanelInput(event) {
+  const field = event.target.dataset.profileField;
+  if (field) {
+    if (event.type !== "change") {
+      return;
+    }
+
+    state.profile = sanitizeProfile({
+      ...state.profile,
+      [field]: event.target.value,
     });
     noteCloudChange();
     persist();
@@ -941,46 +1288,145 @@ function handlePlanInput(event) {
     return;
   }
 
-  const labelTrackId = event.target.dataset.planLabel;
-  if (!labelTrackId) {
+  const draftField = event.target.dataset.newTrackField;
+  if (draftField) {
+    if (draftField === "title") {
+      ui.newTrack.title = sanitizeTrackTitle(event.target.value, "");
+      return;
+    }
+
+    if (draftField === "target") {
+      ui.newTrack.target = sanitizeTrackTargetValue(event.target.value);
+      return;
+    }
+
+    if (draftField === "type" && event.type === "change") {
+      ui.newTrack.type = sanitizeTrackType(event.target.value);
+      renderProfilePanel();
+    }
     return;
   }
 
-  state.plan = sanitizePlan({
-    ...state.plan,
-    labels: {
-      ...state.plan.labels,
-      [labelTrackId]: event.target.value,
-    },
+  const trackTitleId = event.target.dataset.trackTitle;
+  if (trackTitleId && event.type === "change") {
+    updateTrack(trackTitleId, {
+      title: sanitizeTrackTitle(event.target.value, getTrack(trackTitleId)?.title || "Тренировка"),
+    });
+    return;
+  }
+
+  const trackTargetId = event.target.dataset.trackTarget;
+  if (trackTargetId && event.type === "change") {
+    updateTrack(trackTargetId, {
+      target: sanitizeTrackTargetValue(event.target.value),
+    });
+  }
+}
+
+function handleProfilePanelClick(event) {
+  const addButton = event.target.closest("[data-add-track]");
+  if (addButton) {
+    handleAddTrack();
+    return;
+  }
+
+  const removeButton = event.target.closest("[data-remove-track]");
+  if (removeButton) {
+    removeTrack(removeButton.dataset.removeTrack);
+    return;
+  }
+
+  const trackDayButton = event.target.closest("[data-track-day-toggle]");
+  if (trackDayButton) {
+    const trackId = trackDayButton.dataset.trackDayToggle;
+    const weekday = Number(trackDayButton.dataset.weekday);
+    const track = getTrack(trackId);
+    if (!track) {
+      return;
+    }
+
+    const nextDays = toggleWeekday(getTrackScheduleDays(track), weekday);
+    updateTrack(trackId, {
+      scheduleDays: nextDays,
+    });
+    return;
+  }
+
+  const draftDayButton = event.target.closest("[data-new-track-day-toggle]");
+  if (draftDayButton) {
+    const weekday = Number(draftDayButton.dataset.weekday);
+    ui.newTrack.scheduleDays = toggleWeekday(ui.newTrack.scheduleDays, weekday);
+    renderProfilePanel();
+  }
+}
+
+function handleAddTrack() {
+  const newTrack = buildTrackFromDraft(ui.newTrack, getTracks().length);
+  if (!newTrack) {
+    showToast("Введите название тренировки, прежде чем добавлять ее в план.");
+    return;
+  }
+
+  state.tracks = sanitizeTracks([...getTracks(), newTrack]);
+  noteCloudChange();
+  persist();
+  ui.newTrack = createNewTrackDraft();
+  render();
+  showToast("Тренировка добавлена в профиль и появится в ежедневном плане.");
+}
+
+function updateTrack(trackId, updates) {
+  let changed = false;
+
+  state.tracks = getTracks().map((track, index) => {
+    if (track.id !== trackId) {
+      return track;
+    }
+
+    changed = true;
+    return sanitizeTrack(
+      {
+        ...track,
+        ...updates,
+      },
+      index,
+      track,
+    );
   });
+
+  if (!changed) {
+    return;
+  }
+
+  state.entries = sanitizeEntries(state.entries, state.tracks);
   noteCloudChange();
   persist();
   render();
 }
 
-function handlePlanScheduleClick(event) {
-  const button = event.target.closest("[data-plan-day-toggle]");
-  if (!button) {
+function removeTrack(trackId) {
+  const track = getTrack(trackId);
+  if (!track) {
     return;
   }
 
-  const trackId = button.dataset.planDayToggle;
-  const weekday = Number(button.dataset.weekday);
-  const currentDays = getTrackScheduleDays(getTrack(trackId));
-  const nextDays = currentDays.includes(weekday)
-    ? currentDays.filter((day) => day !== weekday)
-    : [...currentDays, weekday].sort((left, right) => left - right);
+  const shouldRemove = window.confirm(`Удалить тренировку «${getTrackTitle(track)}» из этого аккаунта?`);
+  if (!shouldRemove) {
+    return;
+  }
 
-  state.plan = sanitizePlan({
-    ...state.plan,
-    schedules: {
-      ...state.plan.schedules,
-      [trackId]: nextDays,
-    },
-  });
+  state.tracks = getTracks().filter((item) => item.id !== trackId);
+  state.entries = Object.fromEntries(
+    Object.entries(state.entries).map(([date, entry]) => {
+      const nextEntry = { ...entry };
+      delete nextEntry[trackId];
+      return [date, nextEntry];
+    }),
+  );
   noteCloudChange();
   persist();
   render();
+  showToast("Тренировка удалена из профиля.");
 }
 
 function handleSaveClick() {
@@ -1152,6 +1598,7 @@ async function handleDriveTokenResponse(tokenResponse) {
     Date.now() + Math.max((tokenResponse.expires_in || 3600) - 60, 60) * 1000;
 
   await loadDriveAccountProfile();
+  hydrateScopedAccountState();
 
   const action = drive.pendingAction || "sync";
   drive.pendingAction = "";
@@ -1383,14 +1830,14 @@ function buildCloudPayload({ touchUpdatedAt = true } = {}) {
   }
 
   return {
-    version: 1,
+    version: 2,
     updatedAt,
     lastSavedAt: state.lastSavedAt,
     cycleStartDate: state.cycleStartDate,
     historyRange: state.historyRange,
     profile: state.profile,
-    plan: state.plan,
-    entries: sanitizeEntries(state.entries),
+    tracks: state.tracks,
+    entries: sanitizeEntries(state.entries, state.tracks),
   };
 }
 
@@ -1399,13 +1846,13 @@ function hasMeaningfulCloudData(payload) {
     return false;
   }
 
-  const entries = sanitizeEntries(payload.entries);
+  const tracks = sanitizeTracks(payload.tracks, payload.plan);
+  const entries = sanitizeEntries(payload.entries, tracks);
   const profile = sanitizeProfile(payload.profile);
-  const plan = sanitizePlan(payload.plan);
-  const defaultPlan = sanitizePlan(null);
+  const defaultTracks = sanitizeTracks(null);
 
   const hasEntryData = Object.values(entries).some((entry) =>
-    TRACKS.some((track) =>
+    tracks.some((track) =>
       track.type === "number" ? sanitizeNumber(entry[track.id]) > 0 : Boolean(entry[track.id]),
     ),
   );
@@ -1414,12 +1861,11 @@ function hasMeaningfulCloudData(payload) {
     (value) => sanitizeNumber(value) > 0,
   );
 
-  const hasPlanChanges =
-    JSON.stringify(plan.targets) !== JSON.stringify(defaultPlan.targets) ||
-    JSON.stringify(plan.labels) !== JSON.stringify(defaultPlan.labels) ||
-    JSON.stringify(plan.schedules) !== JSON.stringify(defaultPlan.schedules);
+  const hasTrackChanges =
+    JSON.stringify(buildTrackComparisonPayload(tracks)) !==
+    JSON.stringify(buildTrackComparisonPayload(defaultTracks));
 
-  return hasEntryData || hasProfileData || hasPlanChanges;
+  return hasEntryData || hasProfileData || hasTrackChanges;
 }
 
 function applyCloudPayload(payload, fileId) {
@@ -1430,8 +1876,8 @@ function applyCloudPayload(payload, fileId) {
   state.cycleStartDate = sanitizeDateInput(payload.cycleStartDate, state.cycleStartDate);
   state.historyRange = sanitizeHistoryRange(payload.historyRange);
   state.profile = sanitizeProfile(payload.profile);
-  state.plan = sanitizePlan(payload.plan);
-  state.entries = sanitizeEntries(payload.entries);
+  state.tracks = sanitizeTracks(payload.tracks, payload.plan);
+  state.entries = sanitizeEntries(payload.entries, state.tracks);
   state.lastSavedAt = normalizeIso(payload.lastSavedAt);
   state.updatedAt = normalizeIso(payload.updatedAt) || state.updatedAt;
   state.cloudLastSyncedAt = new Date().toISOString();
@@ -1514,17 +1960,12 @@ function hasPendingCloudChanges() {
 
 function getEntry(date) {
   return {
-    pullups: 0,
-    pushups: 0,
-    squats: 0,
-    steps: 0,
-    abs: false,
-    shoulders: false,
+    ...buildEmptyEntry(getTracks()),
     ...(state.entries[date] || {}),
   };
 }
 
-function sanitizeEntries(value) {
+function sanitizeEntries(value, tracks = sanitizeTracks(null)) {
   if (!value || typeof value !== "object") {
     return {};
   }
@@ -1534,14 +1975,11 @@ function sanitizeEntries(value) {
       return accumulator;
     }
 
-    accumulator[date] = {
-      pullups: sanitizeNumber(entry.pullups),
-      pushups: sanitizeNumber(entry.pushups),
-      squats: sanitizeNumber(entry.squats),
-      steps: sanitizeNumber(entry.steps),
-      abs: Boolean(entry.abs),
-      shoulders: Boolean(entry.shoulders),
-    };
+    accumulator[date] = tracks.reduce((cleanEntry, track) => {
+      cleanEntry[track.id] =
+        track.type === "number" ? sanitizeNumber(entry[track.id]) : Boolean(entry[track.id]);
+      return cleanEntry;
+    }, {});
 
     return accumulator;
   }, {});
@@ -1570,7 +2008,7 @@ function getCompletionStats(date) {
 }
 
 function getNumericVolume(entry) {
-  return TRACKS.filter((track) => track.type === "number").reduce(
+  return getTracks().filter((track) => track.type === "number").reduce(
     (total, track) => total + sanitizeNumber(entry[track.id]),
     0,
   );
@@ -1596,7 +2034,7 @@ function getStreakLength(anchorDate) {
 
 function hasActivity(date) {
   const entry = getEntry(date);
-  const numericActivity = TRACKS.some(
+  const numericActivity = getTracks().some(
     (track) => track.type === "number" && sanitizeNumber(entry[track.id]) > 0,
   );
   const checkboxActivity = getPlannedCheckboxTracks(date).some((track) => Boolean(entry[track.id]));
@@ -1635,27 +2073,27 @@ function getEffectiveProfile() {
 function getEstimatedCalories(date) {
   const entry = getEntry(date);
   const profile = getEffectiveProfile();
-  const breakdown = {
-    pullups: 0,
-    pushups: 0,
-    squats: 0,
-    steps: 0,
-    abs: 0,
-    shoulders: 0,
-  };
+  const breakdown = getTracks().reduce((accumulator, track) => {
+    if (track.type === "number") {
+      if (track.energyModel === "steps") {
+        accumulator[track.id] = getStepCalories(entry[track.id], profile.weightKg, profile.heightCm);
+      } else {
+        accumulator[track.id] = getRepCalories(
+          entry[track.id],
+          profile.weightKg,
+          track.secondsPerRep || 3,
+          track.energyMet || 6,
+        );
+      }
+      return accumulator;
+    }
 
-  breakdown.pullups = getRepCalories(entry.pullups, profile.weightKg, 4, 8.5);
-  breakdown.pushups = getRepCalories(entry.pushups, profile.weightKg, 2.5, 8);
-  breakdown.squats = getRepCalories(entry.squats, profile.weightKg, 2.8, 5.5);
-  breakdown.steps = getStepCalories(entry.steps, profile.weightKg, profile.heightCm);
-  breakdown.abs =
-    isTrackPlannedForDate(getTrack("abs"), date) && entry.abs
-      ? getSessionCalories(profile.weightKg, 12, 5.5)
-      : 0;
-  breakdown.shoulders =
-    isTrackPlannedForDate(getTrack("shoulders"), date) && entry.shoulders
-      ? getSessionCalories(profile.weightKg, 20, 6.2)
-      : 0;
+    accumulator[track.id] =
+      isTrackPlannedForDate(track, date) && entry[track.id]
+        ? getSessionCalories(profile.weightKg, track.sessionMinutes || 15, track.energyMet || 5.5)
+        : 0;
+    return accumulator;
+  }, {});
 
   return {
     total: Math.round(
@@ -1701,7 +2139,7 @@ function getCalorieAssumptionCopy() {
 function formatBurnBreakdown(calories) {
   const parts = Object.entries(calories.breakdown)
     .map(([trackId, value]) => ({
-      title: getTrackTitle(getTrack(trackId)),
+      title: getTrackTitle(getTrack(trackId) || { title: trackId }),
       value: Math.round(value),
     }))
     .filter((part) => part.value > 0)
@@ -1715,23 +2153,42 @@ function formatBurnBreakdown(calories) {
   return parts.map((part) => `${part.title}: ${formatNumber(part.value)}`).join(" · ");
 }
 
+function getTracks() {
+  return Array.isArray(state.tracks) ? state.tracks : [];
+}
+
 function getTrack(trackId) {
-  return TRACKS.find((track) => track.id === trackId);
+  return getTracks().find((track) => track.id === trackId) || null;
 }
 
 function getTrackTitle(track) {
-  return sanitizePlanLabel(
-    state.plan.labels?.[track.id],
-    track.title,
-  );
+  return track ? track.title : "Тренировка";
+}
+
+function getTrackDescription(track) {
+  if (track?.description) {
+    return track.description;
+  }
+
+  return track?.type === "number"
+    ? "Запишите итоговое количество за выбранную дату."
+    : "Отметьте выполнение в те дни недели, которые выбраны в профиле.";
+}
+
+function getTrackUnit(track) {
+  return track?.type === "number" ? track.unit || "единиц" : "чек-лист";
+}
+
+function getTrackShortUnit(track) {
+  return track?.shortUnit || (track?.type === "number" ? "ед." : "");
 }
 
 function getPlannedTracks(date) {
-  return TRACKS.filter((track) => isTrackCountedInPlan(track, date));
+  return getTracks().filter((track) => isTrackCountedInPlan(track, date));
 }
 
 function getPlannedCheckboxTracks(date) {
-  return TRACKS.filter(
+  return getTracks().filter(
     (track) => track.type === "checkbox" && isTrackScheduledForDate(track, date),
   );
 }
@@ -1757,12 +2214,11 @@ function isTrackScheduledForDate(track, date) {
 }
 
 function getTrackTarget(track) {
-  return sanitizePlanTarget(track.id, state.plan.targets[track.id]);
+  return sanitizeTrackTargetValue(track?.target);
 }
 
 function getTrackScheduleDays(track) {
-  const days = state.plan.schedules[track.id];
-  return sanitizeWeekdayList(days);
+  return sanitizeWeekdayList(track?.scheduleDays);
 }
 
 function getWeekdayIndex(dateString) {
@@ -1799,7 +2255,24 @@ function getDayPlanMeta(date, plannedCheckboxTracks) {
     return `По плану: ${formatTrackList(plannedCheckboxTracks)}.`;
   }
 
-  return `По плану только базовый объем на ${formatWeekday(date)}.`;
+  return `По плану только ежедневные числовые активности на ${formatWeekday(date)}.`;
+}
+
+function renderSchedulePreview() {
+  const checkboxTracks = getTracks().filter((track) => track.type === "checkbox");
+
+  elements.schedulePreviewList.innerHTML = checkboxTracks.length
+    ? checkboxTracks
+        .map(
+          (track) => `
+            <div class="schedule-preview-item">
+              <span>${escapeHtml(getTrackTitle(track))}</span>
+              <strong>${formatWeekdayList(getTrackScheduleDays(track))}</strong>
+            </div>
+          `,
+        )
+        .join("")
+    : '<span class="empty-note">Пока нет активностей по дням недели.</span>';
 }
 
 function getHistoryPeriod(anchorDate, range) {
@@ -1840,8 +2313,8 @@ function getMonthSummary(anchorDate, offset) {
   const rawEndDate = endOfMonth(monthDate);
   const endDate = offset === 0 ? minDate(rawEndDate, anchorDate) : rawEndDate;
   const dates = enumerateDates(startDate, endDate);
-  const numericTracks = TRACKS.filter((track) => track.type === "number");
-  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const numericTracks = getTracks().filter((track) => track.type === "number");
+  const checkboxTracks = getTracks().filter((track) => track.type === "checkbox");
   const averagePercent = getAveragePercent(dates);
 
   return {
@@ -1963,7 +2436,24 @@ function renderTrendInsight(period) {
 }
 
 function renderVolumeInsight(period) {
-  const numericTracks = TRACKS.filter((track) => track.type === "number");
+  const numericTracks = getTracks().filter((track) => track.type === "number");
+
+  if (!numericTracks.length) {
+    return `
+      <article class="insight-card panel-soft">
+        <div class="insight-head">
+          <div>
+            <p class="summary-label">Объем к плану</p>
+            <h3 class="insight-title">Фактический объем против цели</h3>
+          </div>
+        </div>
+
+        <p class="insight-note">
+          Добавьте хотя бы одну числовую активность во вкладке «Профиль», чтобы увидеть сравнение объема с целью.
+        </p>
+      </article>
+    `;
+  }
 
   return `
     <article class="insight-card panel-soft">
@@ -2063,8 +2553,8 @@ function renderCaloriesInsight(period) {
 }
 
 function renderLoadDistributionInsight(period) {
-  const numericTracks = TRACKS.filter((track) => track.type === "number");
-  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const numericTracks = getTracks().filter((track) => track.type === "number");
+  const checkboxTracks = getTracks().filter((track) => track.type === "checkbox");
   const segments = [...numericTracks, ...checkboxTracks].map((track) => {
     const total = period.dates.reduce(
       (sum, date) => sum + getEstimatedCalories(date).breakdown[track.id],
@@ -2141,7 +2631,7 @@ function buildDistributionGradient(segments, grandTotal) {
 }
 
 function renderDisciplineInsight(period) {
-  const checkboxTracks = TRACKS.filter((track) => track.type === "checkbox");
+  const checkboxTracks = getTracks().filter((track) => track.type === "checkbox");
   const activeDays = period.dates.filter((date) => hasActivity(date)).length;
   const longestStreak = getLongestStreakInRange(period.dates);
   const averageVolume = Math.round(
@@ -2154,9 +2644,11 @@ function renderDisciplineInsight(period) {
       <div class="insight-head">
         <div>
           <p class="summary-label">Дисциплина режима</p>
-          <h3 class="insight-title">${escapeHtml(
-            `${getTrackTitle(getTrack("abs"))}, ${getTrackTitle(getTrack("shoulders"))} и общая ровность`,
-          )}</h3>
+          <h3 class="insight-title">${
+            checkboxTracks.length
+              ? "Ровность по тренировкам по дням"
+              : "Общая стабильность за период"
+          }</h3>
         </div>
       </div>
 
@@ -2183,7 +2675,7 @@ function renderDisciplineInsight(period) {
               </div>
             `;
           })
-          .join("")}
+          .join("") || '<p class="insight-note">Тренировки по дням пока не добавлены.</p>'}
       </div>
 
       <div class="metric-pills">
@@ -2295,6 +2787,152 @@ function formatProfileInput(value) {
   return Number.isInteger(value) ? String(value) : String(value).replace(/\.0$/, "");
 }
 
+function createNewTrackDraft() {
+  return {
+    title: "",
+    type: "number",
+    target: 30,
+    scheduleDays: [1, 3, 5],
+  };
+}
+
+function buildTrackFromDraft(draft, index) {
+  const title = sanitizeTrackTitle(draft.title, "");
+  if (!title) {
+    return null;
+  }
+
+  const type = sanitizeTrackType(draft.type);
+  return sanitizeTrack(
+    {
+      id: createTrackId(title),
+      title,
+      type,
+      target: type === "number" ? draft.target : 0,
+      scheduleDays: type === "checkbox" ? draft.scheduleDays : [],
+    },
+    index,
+  );
+}
+
+function buildEmptyEntry(tracks) {
+  return tracks.reduce((accumulator, track) => {
+    accumulator[track.id] = track.type === "number" ? 0 : false;
+    return accumulator;
+  }, {});
+}
+
+function sanitizeActiveTab(value) {
+  return TAB_IDS.includes(value) ? value : "daily";
+}
+
+function sanitizeTracks(value, legacyPlan) {
+  if (!Array.isArray(value)) {
+    return buildDefaultTracks(legacyPlan);
+  }
+
+  if (!value.length) {
+    return [];
+  }
+
+  const seenIds = new Set();
+
+  return value.reduce((accumulator, track, index) => {
+    const cleanTrack = sanitizeTrack(track, index);
+    if (!cleanTrack || seenIds.has(cleanTrack.id)) {
+      return accumulator;
+    }
+
+    seenIds.add(cleanTrack.id);
+    accumulator.push(cleanTrack);
+    return accumulator;
+  }, []);
+}
+
+function buildDefaultTracks(legacyPlan) {
+  const legacy = sanitizePlan(legacyPlan);
+
+  return TRACKS.map((track, index) =>
+    sanitizeTrack(
+      {
+        ...track,
+        title:
+          track.type === "checkbox"
+            ? sanitizePlanLabel(legacy.labels[track.id], track.title)
+            : track.title,
+        target:
+          track.type === "number"
+            ? sanitizePlanTarget(track.id, legacy.targets[track.id] ?? track.target)
+            : track.target,
+        scheduleDays:
+          track.type === "checkbox"
+            ? sanitizeWeekdayList(legacy.schedules[track.id] ?? track.scheduleDays)
+            : [],
+      },
+      index,
+      track,
+    ),
+  );
+}
+
+function sanitizeTrack(track, index, fallback = {}) {
+  if (!track || typeof track !== "object") {
+    return null;
+  }
+
+  const type = sanitizeTrackType(track.type || fallback.type);
+  const title = sanitizeTrackTitle(
+    track.title,
+    fallback.title || (type === "number" ? "Новая тренировка" : "Новая активность"),
+  );
+  const accent = sanitizeTrackAccent(track.accent, index);
+
+  if (type === "number") {
+    const isSteps = title.toLowerCase().includes("шаг");
+    const target = sanitizeTrackTargetValue(track.target ?? fallback.target ?? 30);
+    const unit = sanitizeTrackUnit(track.unit, isSteps ? "шагов" : fallback.unit || "единиц");
+    const shortUnit = sanitizeTrackUnit(
+      track.shortUnit,
+      isSteps ? "шагов" : fallback.shortUnit || "ед.",
+    );
+
+    return {
+      id: sanitizeTrackId(track.id, title, index),
+      title,
+      type,
+      target,
+      unit,
+      shortUnit,
+      accent,
+      description:
+        sanitizeTrackDescription(track.description) ||
+        fallback.description ||
+        "Запишите итоговое количество за выбранную дату.",
+      increments: deriveTrackIncrements(track.increments, target, isSteps),
+      energyModel: isSteps ? "steps" : sanitizeEnergyModel(track.energyModel, "reps"),
+      energyMet: sanitizeMetricValue(track.energyMet ?? fallback.energyMet ?? 6, 1, 20) || 6,
+      secondsPerRep:
+        sanitizeMetricValue(track.secondsPerRep ?? fallback.secondsPerRep ?? 3, 1, 30) || 3,
+    };
+  }
+
+  return {
+    id: sanitizeTrackId(track.id, title, index),
+    title,
+    type,
+    accent,
+    description:
+      sanitizeTrackDescription(track.description) ||
+      fallback.description ||
+      "Отметьте выполнение в выбранные дни недели.",
+    scheduleDays: sanitizeWeekdayList(track.scheduleDays ?? fallback.scheduleDays ?? [1, 3, 5]),
+    energyModel: "session",
+    energyMet: sanitizeMetricValue(track.energyMet ?? fallback.energyMet ?? 5.5, 1, 20) || 5.5,
+    sessionMinutes:
+      sanitizeMetricValue(track.sessionMinutes ?? fallback.sessionMinutes ?? 15, 0, 180) || 15,
+  };
+}
+
 function sanitizePlan(value) {
   const plan = value && typeof value === "object" ? value : {};
   const rawTargets = plan.targets && typeof plan.targets === "object" ? plan.targets : {};
@@ -2333,20 +2971,7 @@ function sanitizePlanLabel(value, fallback) {
 }
 
 function sanitizePlanTarget(trackId, value) {
-  const maxByTrack = {
-    pullups: 1000,
-    pushups: 3000,
-    squats: 5000,
-    steps: 100000,
-  };
-  const limit = maxByTrack[trackId] || 100000;
-  const number = Number(value);
-
-  if (!Number.isFinite(number) || number < 0) {
-    return 0;
-  }
-
-  return Math.min(Math.round(number), limit);
+  return sanitizeTrackTargetValue(value, trackId === "steps" ? 100000 : 10000);
 }
 
 function sanitizeWeekdayList(value) {
@@ -2366,6 +2991,107 @@ function formatPlanInput(value) {
   }
 
   return String(Math.round(number));
+}
+
+function sanitizeTrackType(value) {
+  return value === "checkbox" ? "checkbox" : "number";
+}
+
+function sanitizeTrackTitle(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ").slice(0, 40);
+  return normalized || fallback;
+}
+
+function sanitizeTrackTargetValue(value, max = 100000) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) {
+    return 0;
+  }
+
+  return Math.min(Math.round(number), max);
+}
+
+function sanitizeTrackId(value, title, index) {
+  if (typeof value === "string" && /^[a-z0-9_-]{3,64}$/i.test(value)) {
+    return value;
+  }
+
+  return `track-${index}-${title.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "custom"}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function sanitizeTrackAccent(value, index) {
+  return typeof value === "string" && value.trim()
+    ? value.trim()
+    : TRACK_ACCENTS[index % TRACK_ACCENTS.length];
+}
+
+function sanitizeTrackUnit(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+
+  const normalized = value.trim().replace(/\s+/g, " ").slice(0, 14);
+  return normalized || fallback;
+}
+
+function sanitizeTrackDescription(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+
+  return value.trim().replace(/\s+/g, " ").slice(0, 140);
+}
+
+function sanitizeEnergyModel(value, fallback) {
+  return ["reps", "steps", "session"].includes(value) ? value : fallback;
+}
+
+function deriveTrackIncrements(value, target, isSteps) {
+  if (Array.isArray(value) && value.length) {
+    const cleaned = value
+      .map((item) => sanitizeTrackTargetValue(item, isSteps ? 50000 : 10000))
+      .filter((item) => item > 0);
+    if (cleaned.length) {
+      return [...new Set(cleaned)].slice(0, 4);
+    }
+  }
+
+  if (isSteps) {
+    return [1000, 2000, 5000];
+  }
+
+  const base = Math.max(target, 20);
+  const options = [Math.round(base * 0.25), Math.round(base * 0.5), Math.round(base)];
+  return [...new Set(options.map((item) => Math.max(item, 1)))];
+}
+
+function toggleWeekday(days, weekday) {
+  return days.includes(weekday)
+    ? days.filter((day) => day !== weekday)
+    : [...days, weekday].sort((left, right) => left - right);
+}
+
+function buildTrackComparisonPayload(tracks) {
+  return tracks.map((track) => ({
+    id: track.id,
+    title: track.title,
+    type: track.type,
+    target: track.type === "number" ? track.target : 0,
+    scheduleDays: track.type === "checkbox" ? track.scheduleDays : [],
+  }));
+}
+
+function createTrackId(title) {
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-zа-я0-9]+/gi, "-")
+      .replace(/^-+|-+$/g, "") || "track";
+  return `${slug}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 function escapeHtml(value) {
@@ -2534,7 +3260,7 @@ function getPulseCopy(percent, volume, focusTracks) {
     body: "Начни с одного упражнения или с шагов. Моментум любит простое начало.",
     hero: focusLabel
       ? `Сегодня в плане еще и ${focusLabel}, так что день можно закрыть особенно цельно.`
-      : "Сегодня без дополнительного блока, так что можно спокойно держать базовый объем.",
+      : "Сегодня без дополнительного блока по дням, так что можно спокойно закрыть числовую базу.",
   };
 }
 

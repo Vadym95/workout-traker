@@ -74,181 +74,198 @@
       </section>
 
       <div class="dashboard-shell" id="dashboard-shell" hidden>
-        <section class="hero panel">
-          <div class="hero-copy">
-            <p class="eyebrow">Ежедневный ритм</p>
-            <h1>Профиль, план и ритм дня в одном месте.</h1>
-            <p class="hero-text" id="hero-text">
-              Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
-            </p>
+        <nav class="tab-nav panel-soft" aria-label="Разделы сайта">
+          <button class="tab-button active" data-tab-button="daily" type="button">
+            Ежедневный план
+          </button>
+          <button class="tab-button" data-tab-button="profile" type="button">
+            Профиль
+          </button>
+          <button class="tab-button" data-tab-button="progress" type="button">
+            Прогресс
+          </button>
+        </nav>
 
-            <div class="profile-panel panel-soft" id="profile-panel"></div>
+        <section class="tab-panel" id="tab-daily">
+          <section class="hero panel">
+            <div class="hero-copy">
+              <p class="eyebrow">Ежедневный ритм</p>
+              <h1>План дня и фактическая отметка в одном ритме.</h1>
+              <p class="hero-text" id="hero-text">
+                Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
+              </p>
 
-            <div class="hero-actions">
-              <button class="button button-primary" id="save-day" type="button">
-                Зафиксировать день
-              </button>
-              <button class="button button-secondary" id="clear-day" type="button">
-                Очистить запись
-              </button>
+              <div class="hero-actions">
+                <button class="button button-primary" id="save-day" type="button">
+                  Зафиксировать день
+                </button>
+                <button class="button button-secondary" id="clear-day" type="button">
+                  Очистить запись
+                </button>
+              </div>
+
+              <p class="status-note" id="status-note">
+                Все данные сохраняются прямо в браузере на этом устройстве.
+              </p>
             </div>
 
-            <p class="status-note" id="status-note">
-              Все данные сохраняются прямо в браузере на этом устройстве.
-            </p>
-          </div>
+            <div class="hero-meter panel-soft">
+              <div class="hero-plan" id="hero-plan"></div>
 
-          <div class="hero-meter panel-soft">
-            <div class="hero-plan" id="hero-plan"></div>
+              <div class="progress-ring" id="progress-ring">
+                <div class="progress-ring-inner">
+                  <span class="progress-value" id="progress-value">0%</span>
+                  <span class="progress-caption">выполнение дня</span>
+                </div>
+              </div>
 
-            <div class="progress-ring" id="progress-ring">
-              <div class="progress-ring-inner">
-                <span class="progress-value" id="progress-value">0%</span>
-                <span class="progress-caption">выполнение дня</span>
+              <div class="day-pulse" id="day-pulse">
+                <p class="day-pulse-label">Фокус дня</p>
+                <p class="day-pulse-value" id="day-pulse-value">Заполни первый блок</p>
+                <p class="day-pulse-text" id="day-pulse-text">
+                  Маленькая отметка сегодня работает лучше, чем идеальный план завтра.
+                </p>
+              </div>
+
+              <div class="burn-card" id="burn-card">
+                <p class="summary-label">Сожжено сегодня</p>
+                <p class="burn-value" id="today-burn-value">~0 ккал</p>
+                <p class="burn-meta" id="today-burn-meta">примерно активных ккал за выбранную дату</p>
+                <p class="burn-breakdown" id="today-burn-breakdown">
+                  Пока нет активности на эту дату.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section class="control-layout">
+            <article class="panel controls-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">День и ритм</p>
+                  <h2>Управление записью</h2>
+                </div>
+              </div>
+
+              <div class="controls-grid">
+                <label class="field">
+                  <span class="field-label">Дата записи</span>
+                  <div class="date-control">
+                    <input id="selected-date" type="date" />
+                    <button class="date-picker-button" id="open-date-picker" type="button">
+                      Выбрать день
+                    </button>
+                  </div>
+                </label>
+
+                <div class="field field-static">
+                  <span class="field-label">Тренировки по дням</span>
+                  <div class="field-static-box schedule-preview-list" id="schedule-preview-list"></div>
+                </div>
+              </div>
+
+              <p class="field-hint">
+                Здесь отмечается только выполнение за выбранную дату. Настройка
+                состава тренировок и дней недели теперь находится во вкладке
+                «Профиль».
+              </p>
+            </article>
+
+            <aside class="panel cadence-card" id="cadence-card">
+              <p class="eyebrow">Ритм по дням</p>
+              <h2 id="cadence-title">Сегодня в плане есть тренировка</h2>
+              <p class="cadence-text" id="cadence-text">
+                Отметь дополнительные активности, которые стоят в плане на выбранную дату.
+              </p>
+
+              <div class="cadence-metrics">
+                <div>
+                  <span class="cadence-label">Следующий блок</span>
+                  <strong id="next-workout">-</strong>
+                </div>
+                <div>
+                  <span class="cadence-label">Ритм недели</span>
+                  <strong id="cycle-start-label">-</strong>
+                </div>
+              </div>
+            </aside>
+          </section>
+
+          <section class="panel tracker-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Запись за день</p>
+                <h2>Отметь, что уже сделано</h2>
               </div>
             </div>
 
-            <div class="day-pulse" id="day-pulse">
-              <p class="day-pulse-label">Фокус дня</p>
-              <p class="day-pulse-value" id="day-pulse-value">Заполни первый блок</p>
-              <p class="day-pulse-text" id="day-pulse-text">
-                Маленькая отметка сегодня работает лучше, чем идеальный план завтра.
-              </p>
-            </div>
-
-            <div class="burn-card" id="burn-card">
-              <p class="summary-label">Сожжено сегодня</p>
-              <p class="burn-value" id="today-burn-value">~0 ккал</p>
-              <p class="burn-meta" id="today-burn-meta">примерно активных ккал за выбранную дату</p>
-              <p class="burn-breakdown" id="today-burn-breakdown">
-                Пока нет активности на эту дату.
-              </p>
-            </div>
-          </div>
+            <div class="tracker-grid" id="tracker-grid"></div>
+          </section>
         </section>
 
-        <section class="summary-grid">
-          <article class="summary-card panel-soft">
-            <p class="summary-label">Серия</p>
-            <p class="summary-value" id="streak-value">0</p>
-            <p class="summary-meta">дней подряд с движением</p>
-          </article>
-          <article class="summary-card panel-soft">
-            <p class="summary-label">Активные дни</p>
-            <p class="summary-value" id="active-days-value">0</p>
-            <p class="summary-meta">за последние 7 дней</p>
-          </article>
+        <section class="tab-panel" id="tab-profile" hidden>
+          <section class="panel profile-section">
+            <div class="profile-panel" id="profile-panel"></div>
+          </section>
+        </section>
+
+        <section class="tab-panel" id="tab-progress" hidden>
+          <section class="summary-grid">
+            <article class="summary-card panel-soft">
+              <p class="summary-label">Серия</p>
+              <p class="summary-value" id="streak-value">0</p>
+              <p class="summary-meta">дней подряд с движением</p>
+            </article>
+            <article class="summary-card panel-soft">
+              <p class="summary-label">Активные дни</p>
+              <p class="summary-value" id="active-days-value">0</p>
+              <p class="summary-meta">за последние 7 дней</p>
+            </article>
           <article class="summary-card panel-soft">
             <p class="summary-label">Объем сегодня</p>
             <p class="summary-value" id="volume-value">0</p>
-            <p class="summary-meta">повторов и шагов</p>
+            <p class="summary-meta">суммарных единиц активности</p>
           </article>
-          <article class="summary-card panel-soft">
-            <p class="summary-label">План сегодня</p>
-            <p class="summary-value" id="plan-value">0 / 0</p>
-            <p class="summary-meta">заполненных направлений</p>
-          </article>
-          <article class="summary-card panel-soft">
-            <p class="summary-label">Сожжено за дату</p>
-            <p class="summary-value" id="calories-value">0</p>
-            <p class="summary-meta" id="calories-meta">примерно активных ккал</p>
-          </article>
-        </section>
+            <article class="summary-card panel-soft">
+              <p class="summary-label">План сегодня</p>
+              <p class="summary-value" id="plan-value">0 / 0</p>
+              <p class="summary-meta">заполненных направлений</p>
+            </article>
+            <article class="summary-card panel-soft">
+              <p class="summary-label">Сожжено за дату</p>
+              <p class="summary-value" id="calories-value">0</p>
+              <p class="summary-meta" id="calories-meta">примерно активных ккал</p>
+            </article>
+          </section>
 
-        <section class="control-layout">
-          <article class="panel controls-card">
+          <section class="panel history-section">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">День и график</p>
-                <h2>Управление записью</h2>
+                <p class="eyebrow">Период обзора</p>
+                <h2>История прогресса</h2>
               </div>
-            </div>
 
-            <div class="controls-grid">
-              <label class="field">
-                <span class="field-label">Дата записи</span>
-                <div class="date-control">
-                  <input id="selected-date" type="date" />
-                  <button class="date-picker-button" id="open-date-picker" type="button">
-                    Выбрать день
+              <div class="history-toolbar">
+                <div class="range-switch" id="history-range-switch">
+                  <button class="range-button active" data-range="7d" type="button">
+                    7 дней
+                  </button>
+                  <button class="range-button" data-range="30d" type="button">
+                    Месяц
+                  </button>
+                  <button class="range-button" data-range="year" type="button">
+                    Год
                   </button>
                 </div>
-              </label>
-
-              <div class="field field-static">
-                <span class="field-label">Ритм недели</span>
-                <div class="field-static-box">
-                  <span id="abs-schedule-preview">Пресс: Вс / Вт / Чт</span>
-                  <br />
-                  <span id="shoulders-schedule-preview">Плечи: Пн / Ср / Пт</span>
-                </div>
+                <p class="history-range-caption" id="history-range-caption">
+                  Последние 7 дней по выбранной дате.
+                </p>
               </div>
             </div>
 
-            <p class="field-hint">
-              Числовые направления отмечаются ежедневно, а пресс и плечи
-              открываются по фиксированным дням недели.
-            </p>
-          </article>
-
-          <aside class="panel cadence-card" id="cadence-card">
-            <p class="eyebrow">Ритм корпуса и плеч</p>
-            <h2 id="cadence-title">Сегодня в плане пресс</h2>
-            <p class="cadence-text" id="cadence-text">
-              Отметь дополнительный блок, который стоит в плане на выбранную дату.
-            </p>
-
-            <div class="cadence-metrics">
-              <div>
-                <span class="cadence-label">Следующий блок</span>
-                <strong id="next-workout">-</strong>
-              </div>
-              <div>
-                <span class="cadence-label">Ритм недели</span>
-                <strong id="cycle-start-label">-</strong>
-              </div>
-            </div>
-          </aside>
-        </section>
-
-        <section class="panel tracker-section">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Запись за день</p>
-              <h2>Отметь, что уже сделано</h2>
-            </div>
-          </div>
-
-          <div class="tracker-grid" id="tracker-grid"></div>
-        </section>
-
-        <section class="panel history-section">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Период обзора</p>
-              <h2>История прогресса</h2>
-            </div>
-
-            <div class="history-toolbar">
-              <div class="range-switch" id="history-range-switch">
-                <button class="range-button active" data-range="7d" type="button">
-                  7 дней
-                </button>
-                <button class="range-button" data-range="30d" type="button">
-                  Месяц
-                </button>
-                <button class="range-button" data-range="year" type="button">
-                  Год
-                </button>
-              </div>
-              <p class="history-range-caption" id="history-range-caption">
-                Последние 7 дней по выбранной дате.
-              </p>
-            </div>
-          </div>
-
-          <div class="history-grid" id="history-grid"></div>
-          <div class="insight-grid" id="insight-grid"></div>
+            <div class="history-grid" id="history-grid"></div>
+            <div class="insight-grid" id="insight-grid"></div>
+          </section>
         </section>
       </div>
     </main>
