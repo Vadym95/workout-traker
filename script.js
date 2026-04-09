@@ -1137,10 +1137,10 @@ async function connectDriveAndReconcile() {
 
   try {
     const remote = await loadCloudPayload();
-    const localPayload = buildCloudPayload();
+    const localPayload = buildCloudPayload({ touchUpdatedAt: false });
 
     if (!remote) {
-      await uploadCloudPayload(localPayload);
+      await uploadCloudPayload(buildCloudPayload());
       state.cloudLastSyncedAt = new Date().toISOString();
       persist();
       render();
@@ -1151,8 +1151,26 @@ async function connectDriveAndReconcile() {
     drive.fileId = remote.fileId;
     state.driveFileId = remote.fileId;
 
+    const localHasData = hasMeaningfulCloudData(localPayload);
+    const remoteHasData = hasMeaningfulCloudData(remote.payload);
+
+    if (!localHasData && remoteHasData) {
+      applyCloudPayload(remote.payload, remote.fileId);
+      showToast("Google Drive подключен. Загружена облачная история.");
+      return;
+    }
+
+    if (localHasData && !remoteHasData) {
+      await uploadCloudPayload(buildCloudPayload());
+      state.cloudLastSyncedAt = new Date().toISOString();
+      persist();
+      render();
+      showToast("Google Drive подключен. Локальная история загружена в облако.");
+      return;
+    }
+
     if (compareIsoDates(localPayload.updatedAt, remote.payload?.updatedAt) >= 0) {
-      await uploadCloudPayload(localPayload);
+      await uploadCloudPayload(buildCloudPayload());
       state.cloudLastSyncedAt = new Date().toISOString();
       persist();
       render();
@@ -1315,9 +1333,11 @@ async function driveFetch(url, options = {}) {
   throw new Error(`Google Drive ответил ${response.status}.${suffix}`.trim());
 }
 
-function buildCloudPayload() {
-  const updatedAt = state.updatedAt || new Date().toISOString();
-  if (!state.updatedAt) {
+function buildCloudPayload({ touchUpdatedAt = true } = {}) {
+  const updatedAt =
+    state.updatedAt || state.lastSavedAt || (touchUpdatedAt ? new Date().toISOString() : null);
+
+  if (touchUpdatedAt && updatedAt && !state.updatedAt) {
     state.updatedAt = updatedAt;
     persist();
   }
@@ -1332,6 +1352,34 @@ function buildCloudPayload() {
     plan: state.plan,
     entries: sanitizeEntries(state.entries),
   };
+}
+
+function hasMeaningfulCloudData(payload) {
+  if (!payload || typeof payload !== "object") {
+    return false;
+  }
+
+  const entries = sanitizeEntries(payload.entries);
+  const profile = sanitizeProfile(payload.profile);
+  const plan = sanitizePlan(payload.plan);
+  const defaultPlan = sanitizePlan(null);
+
+  const hasEntryData = Object.values(entries).some((entry) =>
+    TRACKS.some((track) =>
+      track.type === "number" ? sanitizeNumber(entry[track.id]) > 0 : Boolean(entry[track.id]),
+    ),
+  );
+
+  const hasProfileData = [profile.heightCm, profile.weightKg, profile.age, profile.bodyFat].some(
+    (value) => sanitizeNumber(value) > 0,
+  );
+
+  const hasPlanChanges =
+    JSON.stringify(plan.targets) !== JSON.stringify(defaultPlan.targets) ||
+    JSON.stringify(plan.labels) !== JSON.stringify(defaultPlan.labels) ||
+    JSON.stringify(plan.schedules) !== JSON.stringify(defaultPlan.schedules);
+
+  return hasEntryData || hasProfileData || hasPlanChanges;
 }
 
 function applyCloudPayload(payload, fileId) {
