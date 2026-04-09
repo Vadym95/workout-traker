@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ритм тренировок</title>
-    <link rel="stylesheet" href="./styles.css?v=20260409f" />
+    <link rel="stylesheet" href="./styles.css?v=20260409g" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -73,28 +73,25 @@
 
         <section class="tab-panel" id="tab-daily">
           <section class="hero panel">
-            <div class="hero-copy">
-              <p class="eyebrow">Ежедневный ритм</p>
-              <h1>План дня и фактическая отметка в одном ритме.</h1>
-              <p class="hero-text" id="hero-text">
-                Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
-              </p>
+            <div class="hero-meter panel-soft">
+              <div class="hero-inline-top">
+                <div>
+                  <p class="eyebrow">Ежедневный ритм</p>
+                  <p class="hero-text hero-inline-text" id="hero-text">
+                    Сегодняшняя запись помогает не угадывать прогресс, а видеть его.
+                  </p>
+                </div>
 
-              <div class="hero-actions">
-                <button class="button button-primary" id="save-day" type="button">
-                  Зафиксировать день
-                </button>
-                <button class="button button-secondary" id="clear-day" type="button">
-                  Очистить запись
-                </button>
+                <div class="hero-actions hero-inline-actions">
+                  <button class="button button-primary" id="save-day" type="button">
+                    Зафиксировать день
+                  </button>
+                  <button class="button button-secondary" id="clear-day" type="button">
+                    Очистить запись
+                  </button>
+                </div>
               </div>
 
-              <p class="status-note" id="status-note">
-                Все данные сохраняются прямо в браузере на этом устройстве.
-              </p>
-            </div>
-
-            <div class="hero-meter panel-soft">
               <div class="hero-plan" id="hero-plan"></div>
 
               <div class="progress-ring" id="progress-ring">
@@ -120,6 +117,10 @@
                   Пока нет активности на эту дату.
                 </p>
               </div>
+
+              <p class="status-note" id="status-note">
+                Все данные сохраняются прямо в браузере на этом устройстве.
+              </p>
             </div>
           </section>
 
@@ -257,7 +258,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./drive-config.js?v=20260409f"></script>
-    <script src="./script.js?v=20260409f"></script>
+    <script src="./drive-config.js?v=20260409g"></script>
+    <script src="./script.js?v=20260409g"></script>
   </body>
 </html>

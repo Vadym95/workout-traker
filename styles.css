@@ -2227,6 +2227,23 @@ h2 {
   line-height: 1.5;
 }
 
+.hero-inline-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.85rem;
+  align-items: start;
+}
+
+.hero-inline-text {
+  margin: 0.2rem 0 0;
+  max-width: 30rem;
+}
+
+.hero-inline-actions {
+  justify-content: flex-end;
+  align-items: stretch;
+}
+
 .account-empty {
   margin-top: 1rem;
   min-height: 260px;
