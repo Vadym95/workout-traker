@@ -1179,9 +1179,8 @@ function renderDriveStatus() {
     status =
       "Google Drive подключен. Можно загрузить историю из облака или создать первую резервную копию.";
   } else if (state.cloudLastSyncedAt) {
-    pill = "Раньше синхр.";
-    status =
-      "Локальная копия уже была отправлена в Google Drive. Чтобы продолжить синхронизацию, подключите аккаунт снова.";
+    pill = "Отключено";
+    status = "Подключите Google Drive снова, чтобы продолжить облачную синхронизацию.";
   }
 
   if (connected && drive.accountEmail) {
