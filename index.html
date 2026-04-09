@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ритм тренировок</title>
-    <link rel="stylesheet" href="./styles.css?v=20260409c" />
+    <link rel="stylesheet" href="./styles.css?v=20260409d" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body>
@@ -12,54 +12,49 @@
     <div class="page-glow page-glow-right" aria-hidden="true"></div>
 
     <main class="app-shell">
-      <section class="account-top panel">
-        <div class="account-top-copy">
-          <p class="eyebrow">Google Drive</p>
-          <h2>Сначала выберите аккаунт, потом открывайте историю и план.</h2>
-          <p class="hero-text" id="account-top-text">
-            Подключение аккаунта определяет, чьи данные нужно загрузить и куда
-            сохранять новые отметки.
-          </p>
+      <section class="account-top cloud-panel panel-soft">
+        <div class="cloud-head account-top-head">
+          <div>
+            <p class="eyebrow">Google Drive</p>
+            <h2 class="cloud-title account-top-title">Аккаунт и синхронизация</h2>
+          </div>
+          <span class="sync-pill" id="drive-sync-pill">Локально</span>
         </div>
 
-        <div class="cloud-panel panel-soft account-cloud-panel">
-          <div class="cloud-head">
-            <div>
-              <p class="eyebrow">Облачная история</p>
-              <h3 class="cloud-title">Аккаунт и синхронизация</h3>
-            </div>
-            <span class="sync-pill" id="drive-sync-pill">Локально</span>
-          </div>
+        <div class="account-top-grid">
+          <div class="account-top-meta">
+            <p class="cloud-status" id="drive-status">
+              Подключите Google Drive, чтобы история не терялась при очистке
+              браузера.
+            </p>
 
-          <p class="cloud-status" id="drive-status">
-            Подключите Google Drive, чтобы история не терялась при очистке
-            браузера.
-          </p>
-
-          <div class="cloud-account" id="drive-account-wrap" hidden>
-            <p class="cloud-account-label">Аккаунт</p>
-            <p class="cloud-account-email" id="drive-account-email">-</p>
-            <p class="cloud-account-note" id="drive-account-note">
-              Google Drive подключен для этого аккаунта.
+            <p class="field-hint cloud-hint" id="drive-hint">
+              Данные будут храниться в скрытой папке приложения на вашем Google
+              Drive.
             </p>
           </div>
 
-          <div class="hero-actions cloud-actions">
-            <button class="button button-primary" id="drive-connect" type="button">
-              Подключить Google Drive
-            </button>
-            <button class="button button-secondary" id="drive-sync" type="button">
-              Синхронизировать
-            </button>
-            <button class="button button-secondary" id="drive-disconnect" type="button">
-              Отключить
-            </button>
-          </div>
+          <div class="account-top-actions">
+            <div class="cloud-account" id="drive-account-wrap" hidden>
+              <p class="cloud-account-label">Аккаунт</p>
+              <p class="cloud-account-email" id="drive-account-email">-</p>
+              <p class="cloud-account-note" id="drive-account-note">
+                Google Drive подключен для этого аккаунта.
+              </p>
+            </div>
 
-          <p class="field-hint cloud-hint" id="drive-hint">
-            Данные будут храниться в скрытой папке приложения на вашем Google
-            Drive.
-          </p>
+            <div class="hero-actions cloud-actions">
+              <button class="button button-primary" id="drive-connect" type="button">
+                Подключить Google Drive
+              </button>
+              <button class="button button-secondary" id="drive-sync" type="button">
+                Синхронизировать
+              </button>
+              <button class="button button-secondary" id="drive-disconnect" type="button">
+                Отключить
+              </button>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -262,7 +257,7 @@
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <script src="./drive-config.js?v=20260409c"></script>
-    <script src="./script.js?v=20260409c"></script>
+    <script src="./drive-config.js?v=20260409d"></script>
+    <script src="./script.js?v=20260409d"></script>
   </body>
 </html>
